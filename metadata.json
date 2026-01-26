@@ -1,0 +1,8 @@
+{
+  "description": "Nyaya Mitra - Your AI Legal Assistant with Supreme Court inspired theme, document scanning, and emergency panic features.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "name": "New app"
+}
