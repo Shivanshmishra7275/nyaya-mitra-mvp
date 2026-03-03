@@ -1,0 +1,49 @@
+IN THE {{COURT_NAME}}
+
+APPLICATION FOR ANTICIPATORY BAIL
+Under Section 482 of the Bharatiya Nagarik Suraksha Sanhita, 2023
+
+IN THE MATTER OF:
+{{ACCUSED_NAME}} ... Applicant
+                vs.
+State of [STATE NAME] ... Respondent
+
+FIR No: [FIR NUMBER, IF ANY / ANTICIPATED FIR]
+Police Station: [POLICE STATION NAME]
+Offence(s) apprehended under: {{SECTIONS_CHARGED}}
+
+RESPECTFULLY SHOWETH:
+
+1. INTRODUCTION
+   That the applicant {{ACCUSED_NAME}}, aged [AGE] years, [occupation], 
+   residing at [ADDRESS], apprehends arrest in connection with the above matter.
+
+2. BACKGROUND
+   The applicant is a respected member of the community with no prior criminal 
+   antecedents and has always cooperated with legal processes.
+
+3. GROUNDS FOR APPREHENSION OF ARREST
+   {{USER_PROVIDED_FACTS}}
+
+4. GROUNDS FOR ANTICIPATORY BAIL
+   {{AI_GENERATES_ANTICIPATORY_BAIL_GROUNDS_HERE}}
+
+5. RELEVANT LEGAL PROVISIONS
+   {{AI_INSERTS_SECTION_482_BNSS_PROVISIONS_HERE}}
+
+6. PRAYER
+   It is therefore most humbly prayed that this Hon'ble Court may graciously 
+   be pleased to:
+   
+   a) Grant anticipatory bail to the applicant {{ACCUSED_NAME}} under Section 482 
+      of the BNSS, directing that in the event of arrest, the applicant shall 
+      be released on bail on the following conditions:
+      i.   [Condition 1 — to be specified by Court]
+      ii.  [Condition 2]
+      iii. [Condition 3]
+   b) Pass any other appropriate order in the interest of justice.
+
+Date: {{TODAY_DATE}}
+
+                                              ________________________
+                                              Advocate for the Applicant

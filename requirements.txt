@@ -1,0 +1,47 @@
+# Nyaya Mitra — Full Dependency List
+# Install with: pip install -r requirements.txt
+
+# ── Phase 1: ETL Pipeline ────────────────────────────────────────────────────
+
+# LangChain core framework
+langchain>=0.2.0
+
+# Community integrations — provides PyPDFLoader
+langchain-community>=0.2.0
+
+# PDF parsing backend required by PyPDFLoader
+pypdf>=4.0.0
+
+# Tokenisation utilities (used by LangChain internals; useful when
+# you later switch length_function to tiktoken-based counting)
+tiktoken>=0.7.0
+
+# ── Phase 2: FastAPI Backend ─────────────────────────────────────────────────
+
+# FastAPI framework + Pydantic V2 (bundled)
+fastapi>=0.111.0
+
+# ASGI server — use --reload flag during development
+uvicorn[standard]>=0.30.0
+
+# ── Phase 4: Real RAG Pipeline ────────────────────────────────────────────────
+
+# Google Gemini SDK — generation model
+google-generativeai>=0.7.0
+
+# Load GEMINI_API_KEY and other secrets from the .env file
+python-dotenv>=1.0.0
+
+# BM25 lexical retrieval — kept for backward compatibility
+rank_bm25>=0.2.2
+
+# ── Phase 5: ChromaDB Semantic Search ────────────────────────────────────────
+
+# Vector database — persistent local store with HNSW cosine index
+chromadb>=0.5.0
+
+# Local sentence embeddings — all-MiniLM-L6-v2 (384-dim, CPU-friendly)
+sentence-transformers>=3.0.0
+
+# Numerical operations required by SentenceTransformer
+numpy>=1.26.0

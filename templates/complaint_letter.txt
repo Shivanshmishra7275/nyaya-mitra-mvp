@@ -1,0 +1,52 @@
+TO,
+The Superintendent of Police / [SENIOR OFFICER DESIGNATION],
+[DISTRICT / ZONE NAME],
+[CITY / STATE]
+
+SUBJECT: COMPLAINT AGAINST INACTION / MISCONDUCT OF [OFFICER NAME] 
+         OF [POLICE STATION NAME] — REQUEST FOR IMMEDIATE ACTION
+
+Date: {{TODAY_DATE}}
+
+Most Respected Sir/Madam,
+
+I, {{COMPLAINANT_NAME}}, aged [AGE] years, [occupation], residing at [ADDRESS], 
+most respectfully submit this complaint for your kind attention and necessary action:
+
+1. BACKGROUND
+   {{USER_PROVIDED_FACTS}}
+
+2. COMPLAINT AGAINST THE CONCERNED OFFICER / POLICE STATION
+   a. That I had approached [POLICE STATION NAME] on [DATE] regarding the above 
+      matter and presented a complaint.
+   b. That despite the passage of [NUMBER] days, no action has been taken.
+   c. That the inaction / conduct of [OFFICER NAME, DESIGNATION] has caused 
+      prejudice to my legal rights.
+
+3. LEGAL PROVISIONS VIOLATED
+   {{AI_INSERTS_RELEVANT_BNSS_PROVISIONS_HERE}}
+
+4. DOCUMENTS ENCLOSED
+   a. Copy of original complaint submitted to [POLICE STATION] on [DATE]
+   b. [Other supporting documents]
+
+5. PRAYER
+   In view of the above, I most humbly pray that you may kindly:
+   
+   a) Direct [POLICE STATION NAME] to register an FIR and take immediate action.
+   b) Conduct an inquiry into the inaction / misconduct of the concerned officer.
+   c) Ensure that appropriate legal measures are taken for the protection of 
+      my rights.
+
+I shall be ever grateful for your kind intervention in this matter.
+
+Thanking you,
+
+________________________
+{{COMPLAINANT_NAME}}
+Mobile: [CONTACT NUMBER]
+Email:  [EMAIL]
+Date:   {{TODAY_DATE}}
+Place:  [CITY]
+
+Enclosures: As listed above.

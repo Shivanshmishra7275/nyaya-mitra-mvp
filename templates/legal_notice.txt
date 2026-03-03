@@ -1,0 +1,54 @@
+{{SENDER_ADDRESS}}
+{{TODAY_DATE}}
+
+TO,
+{{RECIPIENT_NAME}}
+{{RECIPIENT_ADDRESS}}
+
+LEGAL NOTICE
+
+Dear Sir/Madam,
+
+Under instructions from and on behalf of my client, {{SENDER_NAME}}, 
+I hereby serve the following legal notice upon you:
+
+1. BACKGROUND
+   {{USER_PROVIDED_FACTS}}
+
+2. LEGAL BASIS
+   {{AI_INSERTS_RELEVANT_LEGAL_PROVISIONS_HERE}}
+
+3. DEMAND
+   You are hereby called upon to [SPECIFIC DEMAND — e.g., cease and desist / 
+   pay amount / restore possession / etc.] within 15 (fifteen) days of receipt 
+   of this notice.
+
+4. CONSEQUENCES OF NON-COMPLIANCE
+   Please be advised that failure to comply with the above demand within the 
+   stipulated time shall compel my client to initiate appropriate legal proceedings 
+   against you before the competent court of law, including but not limited to 
+   criminal proceedings under the applicable provisions of the Bharatiya Nyaya 
+   Sanhita, 2023.
+
+   My client shall also claim costs of this notice and all further legal proceedings 
+   from you.
+
+5. NOTICE EXPENSES
+   This legal notice is being sent at your cost of ₹[AMOUNT].
+
+Please govern yourself accordingly.
+
+                                         Yours faithfully,
+
+                                         ________________________
+                                         [ADVOCATE NAME]
+                                         Advocate
+                                         On behalf of: {{SENDER_NAME}}
+                                         Enrolment No: [BAR COUNCIL NUMBER]
+                                         Address: [ADVOCATE OFFICE ADDRESS]
+                                         Mobile: [CONTACT]
+
+Sent via: Speed Post / Registered Post with AD / Email
+Tracking/Reference No: [POSTAL REFERENCE]
+
+Note: Preserve this notice for your records.

@@ -1,0 +1,57 @@
+IN THE {{COURT_NAME}}
+
+BAIL APPLICATION
+Under Section 480 of the Bharatiya Nagarik Suraksha Sanhita, 2023
+
+IN THE MATTER OF:
+State vs. {{ACCUSED_NAME}}
+FIR No: [TO BE FILLED BY ADVOCATE]
+Case No: [TO BE FILLED BY ADVOCATE]
+Offence(s) under: {{SECTIONS_CHARGED}}
+
+RESPECTFULLY SHOWETH:
+
+1. INTRODUCTION OF THE APPLICANT
+   That the applicant {{ACCUSED_NAME}} was arrested on [ARREST DATE] by 
+   [ARRESTING AUTHORITY / POLICE STATION NAME] and is currently in judicial 
+   custody / police custody.
+
+2. PERSONAL BACKGROUND
+   That the applicant is a [occupation] aged [age] years, residing at [address] 
+   and has deep roots in the community. The applicant has no prior criminal record.
+
+3. BRIEF FACTS OF THE CASE
+   {{USER_PROVIDED_FACTS}}
+
+4. GROUNDS FOR GRANTING BAIL
+   {{AI_GENERATES_BAIL_GROUNDS_HERE}}
+
+5. RELEVANT LEGAL PROVISIONS
+   {{AI_INSERTS_RELEVANT_BNSS_SECTIONS_HERE}}
+
+6. UNDERTAKING
+   The applicant undertakes to:
+   a) Appear before the Investigating Officer and the Court as and when required.
+   b) Not tamper with evidence or influence witnesses.
+   c) Not leave the jurisdiction of this Court without prior permission.
+   d) Surrender the passport, if any.
+
+7. PRAYER
+   In light of the above submissions and circumstances, it is most humbly prayed 
+   that this Hon'ble Court may graciously be pleased to:
+   
+   a) Grant regular bail to the applicant {{ACCUSED_NAME}} in the above-numbered 
+      case on such terms and conditions as this Hon'ble Court may deem just and proper.
+   b) Pass any other order or direction as this Hon'ble Court may deem fit in the 
+      interest of justice.
+
+                                         AND FOR THIS ACT OF KINDNESS,
+                                         THE APPLICANT SHALL EVER PRAY.
+
+Date: {{TODAY_DATE}}
+Place: [City]
+
+                                              ________________________
+                                              Advocate for the Applicant
+                                              Enrolment No: [BAR NUMBER]
+                                              Mobile: [CONTACT NUMBER]

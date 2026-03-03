@@ -1,0 +1,58 @@
+TO,
+The Officer-in-Charge / Station House Officer,
+[POLICE STATION NAME]
+[POLICE STATION ADDRESS]
+
+SUBJECT: COMPLAINT / FIR UNDER SECTION 173 BNSS REGARDING [BRIEF SUBJECT]
+
+Date: {{TODAY_DATE}}
+
+Respected Sir/Madam,
+
+I, {{COMPLAINANT_NAME}}, [age] years, [occupation], residing at [ADDRESS], 
+do hereby lodge the following complaint and request you to register an FIR 
+under the appropriate sections of the Bharatiya Nyaya Sanhita, 2023:
+
+1. DETAILS OF THE COMPLAINANT
+   Name:       {{COMPLAINANT_NAME}}
+   Address:    [ADDRESS]
+   Mobile:     [CONTACT NUMBER]
+   Aadhaar:    [AADHAAR LAST 4 DIGITS — OPTIONAL]
+
+2. DETAILS OF THE ACCUSED (IF KNOWN)
+   Name of Accused:   {{ACCUSED_NAME}}
+   Address of Accused: [ACCUSED ADDRESS, IF KNOWN]
+   Relationship:       [RELATIONSHIP TO COMPLAINANT]
+
+3. FACTS OF THE INCIDENT
+   {{USER_PROVIDED_FACTS}}
+
+4. DATE, TIME AND PLACE OF INCIDENT
+   Date:  [DATE OF INCIDENT]
+   Time:  [TIME OF INCIDENT]
+   Place: [PLACE OF INCIDENT]
+
+5. WITNESSES (IF ANY)
+   1. [WITNESS NAME AND ADDRESS]
+   2. [WITNESS NAME AND ADDRESS]
+
+6. APPLICABLE SECTIONS
+   {{AI_IDENTIFIES_RELEVANT_BNS_SECTIONS_HERE}}
+
+7. PRAYER
+   I hereby request you to:
+   a) Register an FIR in this matter under the applicable sections of the BNS.
+   b) Investigate the matter and take appropriate legal action against the accused.
+   c) Provide me a copy of the FIR as required under Section 173 of the BNSS.
+
+I declare that the facts stated above are true and correct to the best of my 
+knowledge and belief.
+
+Yours faithfully,
+
+________________________
+{{COMPLAINANT_NAME}}
+Date: {{TODAY_DATE}}
+Place: [CITY]
+
+[Attach supporting evidence / documents if available]
