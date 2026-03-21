@@ -1,0 +1,62 @@
+# ════════════════════════════════════════════════════════════════════════════
+# Docker Build Context Exclusion - Root Directory
+# ════════════════════════════════════════════════════════════════════════════
+
+# Virtual Environment
+.venv/
+venv/
+env/
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# Node (frontend dev artifacts)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Git
+.git/
+.gitignore
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Docs (optional - remove if needed in image)
+docs/
+
+# Database files (unless you want to include them)
+*.sqlite3
+*.db
+
+# Development
+.next/
+.cache/
+dist/
+out/

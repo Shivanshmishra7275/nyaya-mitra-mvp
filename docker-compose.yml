@@ -1,0 +1,98 @@
+# ════════════════════════════════════════════════════════════════════════════
+# Nyaya Mitra - Docker Compose Orchestration
+# ════════════════════════════════════════════════════════════════════════════
+# Coordinates Python FastAPI backend and React Native/Expo frontend services
+
+version: '3.9'
+
+services:
+  # ────────────────────────────────────────────────────────────────────────
+  # Backend: FastAPI + Uvicorn
+  # ────────────────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nyaya-mitra-backend
+    ports:
+      - "8000:8000"
+    environment:
+      # API Keys & Secrets (load from .env)
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      # RAG Configuration
+      - CHROMA_DB_PATH=/app/chroma_db
+      - CHROMA_COLLECTION_NAME=${CHROMA_COLLECTION_NAME:-nyaya_mitra_legal}
+      - RAG_TOP_K=${RAG_TOP_K:-15}
+      - CHUNK_SIZE=${CHUNK_SIZE:-1000}
+      - CHUNK_OVERLAP=${CHUNK_OVERLAP:-200}
+      # Embedding Configuration
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
+      - EMBEDDING_DIMENSIONS=384
+      # Gemini Configuration
+      - GEMINI_QA_TEMPERATURE=${GEMINI_QA_TEMPERATURE:-0.1}
+      - GEMINI_QA_MAX_OUTPUT_TOKENS=${GEMINI_QA_MAX_OUTPUT_TOKENS:-2048}
+      - GEMINI_QA_TOP_P=${GEMINI_QA_TOP_P:-0.8}
+      # FastAPI Environment
+      - FASTAPI_ENV=${FASTAPI_ENV:-production}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      # Mount ChromaDB for persistence across container restarts
+      - chroma_db_volume:/app/chroma_db
+      # Mount SQLite DB for persistence
+      - sqlite_db_volume:/app/db
+    networks:
+      - nyaya-network
+    depends_on:
+      - frontend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Frontend: Expo / React Native (Web Preview)
+  # ────────────────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./nyaya-mitra-app
+      dockerfile: Dockerfile
+    container_name: nyaya-mitra-frontend
+    ports:
+      - "3000:3000"
+      - "19000:19000"
+      - "19001:19001"
+    environment:
+      # Proxy API requests to backend service
+      - REACT_APP_API_URL=http://backend:8000
+      - NODE_ENV=production
+      - EXPO_DEBUG=false
+    networks:
+      - nyaya-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# ════════════════════════════════════════════════════════════════════════════
+# Volumes for Data Persistence
+# ════════════════════════════════════════════════════════════════════════════
+
+volumes:
+  chroma_db_volume:
+    driver: local
+  sqlite_db_volume:
+    driver: local
+
+# ════════════════════════════════════════════════════════════════════════════
+# Networks for Service Communication
+# ════════════════════════════════════════════════════════════════════════════
+
+networks:
+  nyaya-network:
+    driver: bridge
