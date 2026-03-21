@@ -121,6 +121,12 @@ app.include_router(document_draft.router)
 
 @app.get("/", include_in_schema=False)
 async def root():
+    """Simple root endpoint used as a human-readable liveness check.
+
+    Returns basic service metadata and helpful links for new developers.
+    No database or vector-store calls are made here, so this path is safe
+    for lightweight uptime checks and does not have side effects.
+    """
     return {
         "service": "Nyaya Mitra API",
         "version": APP_VERSION,
