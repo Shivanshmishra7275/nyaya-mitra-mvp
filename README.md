@@ -1,3 +1,15 @@
+# Nyaya Mitra - AI-First Legal Super-App
+Empowering citizens with accessible legal awareness and offline-first assistance.
+
+> ⚠️ **Development Status: Active Prototyping & Architecture Phase**
+> 
+> *Please note: This project is currently an MVP (Minimum Viable Product) undergoing rapid AI-assisted prototyping. The core system architecture and product vision are mapped out, but the codebase is in a state of active development, experimentation, and refactoring. Expect frequent updates and structural changes.*
+
+## Core Features
+* Mitra AI
+* Raksha Mode
+...
+
 # ⚖️ Nyaya Mitra — AI-Powered Indian Legal Co-Pilot
 
 > **"Nyaya Mitra" (न्याय मित्र) means "Friend of Justice."**
