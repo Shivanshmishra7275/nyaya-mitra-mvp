@@ -13,6 +13,7 @@ import json
 import logging
 import time
 import uuid
+import re
 
 from fastapi import APIRouter, HTTPException, status
 
@@ -50,15 +51,17 @@ async def legal_query(request: LegalQueryRequest) -> LegalQueryResponse:
     """
     start_time = time.monotonic()
 
-    logger.info("Legal query received: '%.80s...'", request.user_query)
+    # Redact query for logging (limit to 100 chars to avoid PII exposure)
+    query_preview = request.user_query[:100].replace("\n", " ")
+    logger.info("Legal query received: '%.80s...'", query_preview)
 
     # ── Guard: Vector store must be loaded ──────────────────────────────────
     if not ChromaDBClient.is_ready():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
-                "Knowledge base is not initialized. "
-                "Run etl_pipeline.py to populate the vector store, then restart."
+                "Legal knowledge base is currently unavailable. "
+                "Please try again in a few moments or contact support."
             ),
         )
 
@@ -78,8 +81,8 @@ async def legal_query(request: LegalQueryRequest) -> LegalQueryResponse:
 
     if not chunks:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No relevant legal information found for this query.",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to retrieve relevant legal information at this time. Please try again.",
         )
 
     # ── Step 2: Assemble context string ─────────────────────────────────────

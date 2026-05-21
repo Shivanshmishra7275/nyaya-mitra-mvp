@@ -38,7 +38,7 @@ At a high level Nyaya Mitra is a **RAG + drafting engine** with a mobile-first U
   - Exposes versioned REST endpoints and performs request/response validation.
   - On startup, initialises:
     - **ChromaDB** persistent collection with law chunks (vector store).
-    - **SentenceTransformer** embedding model (`all-MiniLM-L6-v2`).
+    - **Gemini Embedding API** for semantic search (`models/gemini-embedding-001`).
     - **SQLite** database for anonymous session + analytics logging.
 
 - **RAG & Drafting Services**
@@ -254,7 +254,7 @@ documented in `.env.example`.
 |------------------------|------------------------|-------------|
 | `CHROMA_DB_PATH`       | `./chroma_db`         | Filesystem path where the ChromaDB persistent store is created. Can be pointed to any writable directory. |
 | `CHROMA_COLLECTION_NAME` | `nyaya_mitra_legal` | Name of the ChromaDB collection that stores all embedded law chunks. |
-| `EMBEDDING_MODEL`      | `all-MiniLM-L6-v2`    | HuggingFace model ID used by SentenceTransformer. Must match the embedding dimension expected by the app. |
+| `EMBEDDING_MODEL`      | `models/gemini-embedding-001` | Gemini embedding model ID used for semantic search. Embedding dimensions: 768. |
 | `RAG_TOP_K`            | `15`                  | Default number of chunks retrieved per query; can be tuned for recall vs. latency. |
 
 ### Optional (FastAPI & App Behaviour)

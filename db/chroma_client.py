@@ -36,7 +36,7 @@ class ChromaDBClient:
         Called once during FastAPI startup (lifespan handler in main.py).
         
         The collection uses cosine similarity, which is appropriate for
-        normalized sentence-transformer embeddings.
+        normalized dense embeddings (Gemini text embeddings in our case).
         """
         # Ensure the directory exists (ChromaDB will create files inside it)
         Path(CHROMA_DB_PATH).mkdir(parents=True, exist_ok=True)

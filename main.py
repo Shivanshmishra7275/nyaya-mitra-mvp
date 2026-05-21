@@ -29,10 +29,12 @@ from config import (
     CORS_ORIGINS,
     LOG_LEVEL,
     FASTAPI_ENV,
+    TEMPLATES_DIR,
 )
 from db.chroma_client import ChromaDBClient
 from db.sqlite_client import initialize_db
 from routers import health, legal_query, document_draft
+from services.drafting_service import DOCUMENT_TYPE_LABELS
 
 # ── Logging configuration ────────────────────────────────────────────────────
 logging.basicConfig(
@@ -55,6 +57,7 @@ async def lifespan(app: FastAPI):
     STARTUP:
       1. Initialize SQLite (creates tables if not exist).
       2. Initialize ChromaDB client and load the legal corpus collection.
+      3. Validate all document templates are present.
 
     SHUTDOWN:
       ChromaDB PersistentClient handles its own cleanup.
@@ -83,6 +86,21 @@ async def lifespan(app: FastAPI):
             "API will start in degraded mode — run etl_pipeline.py first.",
             exc,
         )
+
+    # Validate document templates exist
+    try:
+        from pathlib import Path
+        for doc_type in DOCUMENT_TYPE_LABELS.keys():
+            template_path = TEMPLATES_DIR / f"{doc_type}.txt"
+            if not template_path.exists():
+                logger.error(
+                    "Missing template file for '%s' at: %s",
+                    doc_type,
+                    template_path,
+                )
+        logger.info("Document templates validated.")
+    except Exception as exc:
+        logger.error("Template validation failed: %s", exc)
 
     logger.info("Nyaya Mitra API ready.")
     yield

@@ -31,9 +31,11 @@ if not GEMINI_API_KEY:
 CHROMA_DB_PATH: str       = os.getenv("CHROMA_DB_PATH", str(BASE_DIR / "chroma_db"))
 CHROMA_COLLECTION_NAME: str = os.getenv("CHROMA_COLLECTION_NAME", "nyaya_mitra_legal")
 
-# ── Embedding Model ─────────────────────────────────────────────────────────
-EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
-EMBEDDING_DIMENSIONS: int = 384   # Matches all-MiniLM-L6-v2 output
+# ── Embedding Model (Gemini) ────────────────────────────────────────────────
+# Default to Google's latest text embedding model for retrieval.
+# This is used both by the offline ETL pipeline and the online RAG service.
+EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-001")
+EMBEDDING_DIMENSIONS: int = 768   # Matches gemini-embedding-001 output (approx.)
 
 # ── RAG Configuration ────────────────────────────────────────────────────────
 RAG_TOP_K: int        = int(os.getenv("RAG_TOP_K", "15"))
@@ -41,7 +43,7 @@ CHUNK_SIZE: int       = int(os.getenv("CHUNK_SIZE", "1000"))
 CHUNK_OVERLAP: int    = int(os.getenv("CHUNK_OVERLAP", "200"))
 
 # ── Gemini Configuration ──────────────────────────────────────────────────
-GEMINI_MODEL: str = "gemini-2.5-flash"   # Confirmed best price/quality for RAG
+GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # Low temperature for legal Q&A — maximal determinism over creativity
 GEMINI_QA_TEMPERATURE: float         = 0.1

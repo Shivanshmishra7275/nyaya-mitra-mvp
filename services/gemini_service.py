@@ -15,6 +15,7 @@ All prompt templates are defined in this module — single source of truth.
 import json
 import logging
 import re
+from typing import Optional
 
 import google.generativeai as genai
 from google.generativeai.types import GenerationConfig
@@ -173,10 +174,15 @@ def generate_legal_response(user_query: str, legal_context: str) -> dict:
     )
 
     logger.info("Calling Gemini for legal Q&A...")
-    response = model_with_system.generate_content(
-        prompt,
-        generation_config=generation_config,
-    )
+    try:
+        response = model_with_system.generate_content(
+            prompt,
+            generation_config=generation_config,
+            request_options={"timeout": 60},
+        )
+    except Exception as exc:
+        logger.error("Gemini API timeout or error: %s", exc)
+        raise
 
     raw_text = response.text.strip()
     logger.info("Gemini raw output length: %d chars", len(raw_text))
@@ -225,10 +231,15 @@ def generate_draft_document(
     )
 
     logger.info("Calling Gemini for document drafting...")
-    response = model_with_system.generate_content(
-        prompt,
-        generation_config=generation_config,
-    )
+    try:
+        response = model_with_system.generate_content(
+            prompt,
+            generation_config=generation_config,
+            request_options={"timeout": 90},
+        )
+    except Exception as exc:
+        logger.error("Gemini draft generation timeout or error: %s", exc)
+        raise
 
     draft_text = response.text.strip()
     logger.info("Gemini draft output length: %d chars", len(draft_text))
@@ -281,9 +292,13 @@ def _parse_json_response(raw_text: str) -> dict:
         text,
     )
     return {
-        "explanation": text[:800] if text else "Unable to generate a structured response.",
+        "explanation": (
+            "Due to a processing error, we could not generate a structured response. "
+            "Please try a rephrased question or contact support."
+        ),
         "citations": [],
         "suggested_next_steps": [
-            "Consult a registered advocate for detailed guidance on this matter."
+            "Consult a registered advocate for guidance on this legal matter.",
+            "Rephrase your question and try again.",
         ],
     }

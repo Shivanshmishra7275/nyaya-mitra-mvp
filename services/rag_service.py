@@ -1,36 +1,34 @@
-"""
-services/rag_service.py
-========================
+"""services/rag_service.py
+=========================
 Nyaya Mitra — RAG Retrieval Service
---------------------------------------
+-----------------------------------
 Handles:
-  1. Encoding user queries using SentenceTransformer (all-MiniLM-L6-v2).
-  2. Semantic search over ChromaDB (K=15 by default).
-  3. Assembling retrieved chunks into a structured context string for Gemini.
+    1. Encoding user queries using the Gemini embedding API.
+    2. Semantic search over ChromaDB (K=15 by default).
+    3. Assembling retrieved chunks into a structured context string for Gemini.
 
-Design note:
-  The embedding model is loaded ONCE at module import time and reused for
-  all requests. Loading it per-request would add ~2–3 seconds of startup
-  latency to every query.
+The previous implementation used a local SentenceTransformer model, which
+was memory-heavy on small cloud instances. This version is fully API-driven
+and keeps memory usage low while preserving the external API contract.
 """
 
 import logging
 import re
 from typing import Optional
 
-from sentence_transformers import SentenceTransformer
+import google.generativeai as genai
 
-from config import EMBEDDING_MODEL, RAG_TOP_K, LAW_CODE_MAP
+from config import EMBEDDING_MODEL, GEMINI_API_KEY, RAG_TOP_K, LAW_CODE_MAP
 from db.chroma_client import ChromaDBClient
 
 logger = logging.getLogger(__name__)
 
-# ── Singleton Embedding Model ────────────────────────────────────────────────
-# Loaded once when the module is first imported (during FastAPI startup).
-# The model download is cached by sentence_transformers in ~/.cache/
-logger.info("Loading embedding model: %s", EMBEDDING_MODEL)
-_embedding_model = SentenceTransformer(EMBEDDING_MODEL)
-logger.info("Embedding model loaded successfully.")
+# ── Gemini Embedding Configuration ───────────────────────────────────────────
+
+# Configure the Gemini SDK once at import time using the API key loaded
+# from config.py. No local ML weights are loaded, keeping memory footprint low.
+genai.configure(api_key=GEMINI_API_KEY)
+logger.info("Using Gemini embedding model: %s", EMBEDDING_MODEL)
 
 
 def retrieve_context(query: str, top_k: int = RAG_TOP_K) -> list[dict]:
@@ -38,7 +36,7 @@ def retrieve_context(query: str, top_k: int = RAG_TOP_K) -> list[dict]:
     Performs semantic search over the ChromaDB legal corpus.
 
     Steps:
-      1. Encodes the query string into a 384-dim embedding vector.
+            1. Encodes the query string into an embedding vector via Gemini.
       2. Queries ChromaDB for the top_k most similar document chunks.
       3. Returns a list of dicts, each with 'document' and 'metadata' keys.
 
@@ -54,8 +52,17 @@ def retrieve_context(query: str, top_k: int = RAG_TOP_K) -> list[dict]:
     """
     collection = ChromaDBClient.get_collection()
 
-    # Encode the query to a vector (returns numpy array → convert to plain list)
-    query_embedding: list[float] = _embedding_model.encode(query).tolist()
+    # Encode the query to a vector via Gemini's embedding API.
+    try:
+        result = genai.embed_content(
+            model=EMBEDDING_MODEL,
+            content=query,
+            task_type="retrieval_query",
+        )
+        query_embedding: list[float] = result["embedding"]
+    except Exception as exc:
+        logger.error("Embedding API call failed: %s. Retrying without embedding fallback.", exc)
+        raise RuntimeError(f"Failed to encode query: {exc}") from exc
 
     # Perform ANN search in ChromaDB
     results = collection.query(

@@ -40,8 +40,3 @@ rank_bm25>=0.2.2
 # Vector database — persistent local store with HNSW cosine index
 chromadb>=0.5.0
 
-# Local sentence embeddings — all-MiniLM-L6-v2 (384-dim, CPU-friendly)
-sentence-transformers>=3.0.0
-
-# Numerical operations required by SentenceTransformer
-numpy>=1.26.0

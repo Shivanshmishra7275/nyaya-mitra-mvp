@@ -26,8 +26,8 @@ services:
       - CHUNK_SIZE=${CHUNK_SIZE:-1000}
       - CHUNK_OVERLAP=${CHUNK_OVERLAP:-200}
       # Embedding Configuration
-      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
-      - EMBEDDING_DIMENSIONS=384
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-models/gemini-embedding-001}
+      - EMBEDDING_DIMENSIONS=768
       # Gemini Configuration
       - GEMINI_QA_TEMPERATURE=${GEMINI_QA_TEMPERATURE:-0.1}
       - GEMINI_QA_MAX_OUTPUT_TOKENS=${GEMINI_QA_MAX_OUTPUT_TOKENS:-2048}
@@ -42,8 +42,6 @@ services:
       - sqlite_db_volume:/app/db
     networks:
       - nyaya-network
-    depends_on:
-      - frontend
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

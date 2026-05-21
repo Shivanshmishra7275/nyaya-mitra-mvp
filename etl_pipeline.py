@@ -1,40 +1,47 @@
-"""
-etl_pipeline.py
-================
-Nyaya Mitra - Legal AI ETL Pipeline (ChromaDB Edition)
+"""etl_pipeline.py
+===================
+Nyaya Mitra - Legal AI ETL Pipeline (ChromaDB + Gemini)
 -------------------------------------------------------
 Extract  : Loads raw legal PDFs from Raw_Data/ via LangChain PyPDFLoader.
 Transform: Splits pages into overlapping chunks; enriches metadata with
            law_code, chunk_id (deterministic), and 1-indexed page numbers.
-Embed    : Encodes every chunk with SentenceTransformer all-MiniLM-L6-v2
-           (384-dimensional dense vectors, runs locally on CPU).
-Load     : Upserts all chunks + embeddings + metadata into a ChromaDB
+Embed    : Encodes every chunk using the Gemini embedding API in batches,
+           with quota-aware retry and a local checkpoint.
+Load     : Upserts chunks + embeddings + metadata into a ChromaDB
            PersistentClient collection (cosine similarity, HNSW index).
 
 Run once before starting the FastAPI server:
     python etl_pipeline.py
 """
 
+from __future__ import annotations
+
+import json
 import logging
+import sys
 import time
 from pathlib import Path
 from typing import Any
 
 import chromadb
+import google.generativeai as genai
+from google.api_core.exceptions import ResourceExhausted
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from sentence_transformers import SentenceTransformer
 
 from config import (
+    BASE_DIR,
     CHROMA_COLLECTION_NAME,
     CHROMA_DB_PATH,
     CHUNK_OVERLAP,
     CHUNK_SIZE,
     EMBEDDING_MODEL,
+    GEMINI_API_KEY,
     LAW_CODE_MAP,
     PDF_FILES,
     RAW_DATA_DIR,
 )
+
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -47,12 +54,76 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 # ---------------------------------------------------------------------------
-# Constants
+# Constants & Checkpointing
 # ---------------------------------------------------------------------------
 
-EMBED_BATCH_SIZE = 32   # chunks per SentenceTransformer encode() call
-CHROMA_BATCH_SIZE = 500  # documents per ChromaDB upsert() call
+# Number of chunks to embed per Gemini API call. Kept in the
+# 10–20 range (16) to balance latency and quota safety.
+EMBED_BATCH_SIZE = 16
+
+# Wait time (seconds) before retrying when hitting free-tier quota limits.
+EMBED_RETRY_SLEEP_SECONDS = 60
+
+# Local JSON checkpoint file to allow resuming long ETL runs without
+# re-embedding already-processed chunks.
+CHECKPOINT_PATH = BASE_DIR / "etl_checkpoint.json"
+
+
+# ---------------------------------------------------------------------------
+# Gemini Embeddings Setup
+# ---------------------------------------------------------------------------
+
+# Configure the Gemini SDK once for the ETL process. The API key is loaded
+# from config.py, which in turn reads it from the environment (.env).
+genai.configure(api_key=GEMINI_API_KEY)
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint helpers
+# ---------------------------------------------------------------------------
+
+def _load_checkpoint(total_chunks: int) -> int:
+    """Return the next chunk index to process based on the checkpoint.
+
+    If no checkpoint exists or it cannot be read, start from 0.
+    """
+    if not CHECKPOINT_PATH.exists():
+        return 0
+
+    try:
+        with CHECKPOINT_PATH.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        idx = int(data.get("next_index", 0))
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning(
+            "Failed to read ETL checkpoint '%s': %s; starting from 0",
+            CHECKPOINT_PATH,
+            exc,
+        )
+        return 0
+
+    # Clamp to valid range
+    return max(0, min(idx, total_chunks))
+
+
+def _save_checkpoint(next_index: int, total_chunks: int) -> None:
+    """Persist the index of the next chunk to process as JSON."""
+    payload = {
+        "next_index": int(next_index),
+        "total_chunks": int(total_chunks),
+        "timestamp": time.time(),
+    }
+    try:
+        with CHECKPOINT_PATH.open("w", encoding="utf-8") as f:
+            json.dump(payload, f)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning(
+            "Failed to write ETL checkpoint '%s': %s",
+            CHECKPOINT_PATH,
+            exc,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -60,8 +131,8 @@ CHROMA_BATCH_SIZE = 500  # documents per ChromaDB upsert() call
 # ---------------------------------------------------------------------------
 
 def extract_documents(pdf_dir: Path, pdf_files: list[str]) -> list[Any]:
-    """
-    Load all PDFs from *pdf_dir* using PyPDFLoader.
+    """Load all PDFs from *pdf_dir* using PyPDFLoader.
+
     Normalises metadata:
       - source  → bare filename (e.g. 'bns.pdf')
       - page    → 1-indexed integer (PyPDFLoader uses 0-indexed by default)
@@ -93,10 +164,13 @@ def extract_documents(pdf_dir: Path, pdf_files: list[str]) -> list[Any]:
             all_documents.extend(documents)
             elapsed = time.perf_counter() - t0
             logger.info(
-                "  [EXTRACT] %-12s  %4d pages  (%.2fs)", filename, len(documents), elapsed
+                "  [EXTRACT] %-12s  %4d pages  (%.2fs)",
+                filename,
+                len(documents),
+                elapsed,
             )
 
-        except Exception as exc:
+        except Exception as exc:  # pragma: no cover - defensive
             logger.error("Failed to load '%s': %s", filename, exc, exc_info=True)
 
     logger.info("Extraction complete — total pages: %d", len(all_documents))
@@ -108,9 +182,7 @@ def extract_documents(pdf_dir: Path, pdf_files: list[str]) -> list[Any]:
 # ---------------------------------------------------------------------------
 
 def transform_chunks(documents: list[Any]) -> list[dict]:
-    """
-    Split pages into overlapping chunks and enrich each with a deterministic
-    chunk_id of the form  <stem>_p<page:04d>_c<i:04d>  (e.g. bns_p0023_c0002).
+    """Split pages into overlapping chunks and enrich with deterministic IDs.
 
     Returns a list of plain dicts:
         {
@@ -160,80 +232,74 @@ def transform_chunks(documents: list[Any]) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# EMBED
+# EMBED + LOAD (Gemini API with checkpointing)
 # ---------------------------------------------------------------------------
 
-def generate_embeddings(
-    chunks: list[dict], model: SentenceTransformer
-) -> list[list[float]]:
+def embed_and_load_with_checkpoint(chunks: list[dict]) -> int:
+    """Embed all chunks with Gemini and upsert into ChromaDB incrementally.
+
+    Uses batch embedding (EMBED_BATCH_SIZE texts per API call), handles
+    free-tier quota errors with a fixed backoff, and writes a checkpoint
+    after every successful upsert so that long runs can be resumed.
     """
-    Encode chunk texts in batches of EMBED_BATCH_SIZE.
-    Returns list of 384-dim float vectors aligned 1:1 with *chunks*.
-    """
-    texts = [c["text"] for c in chunks]
-    all_embeddings: list[list[float]] = []
-
-    total_batches = (len(texts) + EMBED_BATCH_SIZE - 1) // EMBED_BATCH_SIZE
-    t0 = time.perf_counter()
-
-    for batch_idx in range(total_batches):
-        start = batch_idx * EMBED_BATCH_SIZE
-        end = start + EMBED_BATCH_SIZE
-        batch = texts[start:end]
-
-        vectors = model.encode(batch, show_progress_bar=False).tolist()
-        all_embeddings.extend(vectors)
-
-        if (batch_idx + 1) % 10 == 0 or (batch_idx + 1) == total_batches:
-            elapsed = time.perf_counter() - t0
-            logger.info(
-                "  [EMBED] batch %d/%d  |  %d/%d chunks  (%.1fs)",
-                batch_idx + 1, total_batches,
-                min(end, len(texts)), len(texts),
-                elapsed,
-            )
-
-    logger.info(
-        "Embedding complete — %d vectors generated in %.1fs",
-        len(all_embeddings),
-        time.perf_counter() - t0,
-    )
-    return all_embeddings
-
-
-# ---------------------------------------------------------------------------
-# LOAD
-# ---------------------------------------------------------------------------
-
-def load_to_chromadb(
-    chunks: list[dict],
-    embeddings: list[list[float]],
-    db_path: str,
-    collection_name: str,
-) -> int:
-    """
-    Upsert all chunks into a ChromaDB PersistentClient in batches.
-    Returns the final document count in the collection.
-    """
-    client = chromadb.PersistentClient(path=db_path)
+    client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
 
     collection = client.get_or_create_collection(
-        name=collection_name,
+        name=CHROMA_COLLECTION_NAME,
         metadata={"hnsw:space": "cosine"},
     )
 
     total = len(chunks)
-    upserted = 0
+    start_index = _load_checkpoint(total)
+
+    if start_index >= total:
+        logger.info(
+            "Checkpoint indicates all %d chunks already processed; "
+            "skipping embedding.",
+            total,
+        )
+        return collection.count()
+
+    if start_index > 0:
+        logger.info("Resuming ETL from chunk index %d / %d", start_index, total)
+
     t0 = time.perf_counter()
 
-    for start in range(0, total, CHROMA_BATCH_SIZE):
-        end = min(start + CHROMA_BATCH_SIZE, total)
+    for start in range(start_index, total, EMBED_BATCH_SIZE):
+        end = min(start + EMBED_BATCH_SIZE, total)
         batch_chunks = chunks[start:end]
-        batch_embeddings = embeddings[start:end]
+        texts = [c["text"] for c in batch_chunks]
+
+        # Single embed_content call per batch; if we hit a quota error, we
+        # sleep EMBED_RETRY_SLEEP_SECONDS and retry the same batch.
+        while True:
+            try:
+                result = genai.embed_content(
+                    model=EMBEDDING_MODEL,
+                    content=texts,
+                )
+                break
+            except ResourceExhausted as exc:
+                logger.warning(
+                    "Gemini embedding quota hit; sleeping %.1fs before "
+                    "retrying batch (%d-%d) / %d: %s",
+                    EMBED_RETRY_SLEEP_SECONDS,
+                    start,
+                    end,
+                    total,
+                    exc,
+                )
+                time.sleep(EMBED_RETRY_SLEEP_SECONDS)
+
+        if "embeddings" in result:
+            batch_vectors = [emb["values"] for emb in result["embeddings"]]
+        else:
+            # Fallback for unexpected single-embedding responses.
+            batch_vectors = [result["embedding"]]
 
         collection.upsert(
             ids=[c["chunk_id"] for c in batch_chunks],
-            embeddings=batch_embeddings,
+            embeddings=batch_vectors,
             documents=[c["text"] for c in batch_chunks],
             metadatas=[
                 {
@@ -244,16 +310,23 @@ def load_to_chromadb(
                 for c in batch_chunks
             ],
         )
-        upserted += len(batch_chunks)
-        logger.info(
-            "  [LOAD] upserted %d / %d  (%.1fs)",
-            upserted, total, time.perf_counter() - t0,
-        )
+
+        _save_checkpoint(end, total)
+
+        if (end % 200 == 0) or end == total:
+            elapsed = time.perf_counter() - t0
+            logger.info(
+                "  [EMBED+LOAD] upserted %d / %d chunks (%.1fs)",
+                end,
+                total,
+                elapsed,
+            )
 
     final_count = collection.count()
     logger.info(
-        "Load complete — collection '%s' now holds %d documents (%.1fs total)",
-        collection_name, final_count, time.perf_counter() - t0,
+        "Embed+Load complete — collection '%s' now holds %d documents.",
+        CHROMA_COLLECTION_NAME,
+        final_count,
     )
     return final_count
 
@@ -263,39 +336,31 @@ def load_to_chromadb(
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    """
-    Full ETL: Extract → Transform → Embed → Load
-    """
-    pipeline_start = time.perf_counter()
+     """Full ETL: Extract → Transform → Embed → Load."""
+     pipeline_start = time.perf_counter()
+ 
+     logger.info("=" * 64)
+     logger.info("Nyaya Mitra — ETL Pipeline  START")
+     logger.info("  DB path    : %s", CHROMA_DB_PATH)
+     logger.info("  Collection : %s", CHROMA_COLLECTION_NAME)
+     logger.info("  Model      : %s", EMBEDDING_MODEL)
+     logger.info("=" * 64)
+ 
+     # 1. EXTRACT
+     documents = extract_documents(RAW_DATA_DIR, PDF_FILES)
+     if not documents:
+         logger.error("No documents loaded. Aborting.")
+         sys.exit(1)
+ 
+     # 2. TRANSFORM
+     chunks = transform_chunks(documents)
+     if not chunks:
+         logger.error("No chunks produced. Aborting.")
+         sys.exit(1)
 
-    logger.info("=" * 64)
-    logger.info("Nyaya Mitra — ETL Pipeline  START")
-    logger.info("  DB path    : %s", CHROMA_DB_PATH)
-    logger.info("  Collection : %s", CHROMA_COLLECTION_NAME)
-    logger.info("  Model      : %s", EMBEDDING_MODEL)
-    logger.info("=" * 64)
-
-    # 1. EXTRACT
-    documents = extract_documents(RAW_DATA_DIR, PDF_FILES)
-    if not documents:
-        logger.error("No documents loaded. Aborting.")
-        return
-
-    # 2. TRANSFORM
-    chunks = transform_chunks(documents)
-    if not chunks:
-        logger.error("No chunks produced. Aborting.")
-        return
-
-    # 3. EMBED — load model once, reuse for all chunks
-    logger.info("Loading SentenceTransformer model: %s", EMBEDDING_MODEL)
-    model = SentenceTransformer(EMBEDDING_MODEL)
-    embeddings = generate_embeddings(chunks, model)
-
-    # 4. LOAD
-    final_count = load_to_chromadb(
-        chunks, embeddings, CHROMA_DB_PATH, CHROMA_COLLECTION_NAME
-    )
+    # 3. EMBED + LOAD — Gemini embeddings with checkpointed Chroma upserts
+    logger.info("Embedding and loading with Gemini model: %s", EMBEDDING_MODEL)
+    final_count = embed_and_load_with_checkpoint(chunks)
 
     elapsed = time.perf_counter() - pipeline_start
     logger.info("=" * 64)
