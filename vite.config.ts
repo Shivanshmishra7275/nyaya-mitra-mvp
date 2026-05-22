@@ -9,7 +9,17 @@ export default defineConfig(({ mode }) => {
         port: 3000,
         host: '0.0.0.0',
       },
-      plugins: [react()],
+      plugins: [
+        react(),
+        {
+          name: 'ignore-google-ai',
+          resolveId(id) {
+            if (id === '@google/generative-ai') {
+              return { id, external: true };
+            }
+          }
+        }
+      ],
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
@@ -17,6 +27,16 @@ export default defineConfig(({ mode }) => {
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),
+        }
+      },
+      build: {
+        rollupOptions: {
+          external: ['@google/generative-ai'],
+          output: {
+            globals: {
+              '@google/generative-ai': 'GoogleGenerativeAI'
+            }
+          }
         }
       }
     };
