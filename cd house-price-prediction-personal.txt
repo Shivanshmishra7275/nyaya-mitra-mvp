@@ -1,0 +1,8 @@
+cd house-price-prediction-personal
+git init
+git config user.name "Shivansh Mishra"
+git config user.email "tgsmishra@gmail.com"
+git add .
+git commit -m "Personal Project: Individual House Price Prediction by Shivansh Mishra"
+git remote add origin https://github.com/Shivansh-mishraji/house-price-prediction.git
+git push -u origin main
