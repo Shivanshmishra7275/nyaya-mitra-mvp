@@ -15,7 +15,9 @@ import {
   ExternalLink,
   Info
 } from 'lucide-react';
-import { GoogleGenAI, Type } from "@google/genai";
+
+// Declare Google Generative AI for runtime usage
+declare const window: Window & { GoogleGenerativeAI?: any };
 
 // Standard Theme Colors
 const NYAYA_THEME = {
@@ -94,8 +96,24 @@ const NyayaMitra: React.FC = () => {
     setError(null);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
+      console.log('[handleSend] API Key present:', !!apiKey);
       
+      if (!apiKey) {
+        throw new Error("API key not configured. Add VITE_GEMINI_API_KEY to .env file");
+      }
+      
+      // Check if GoogleGenerativeAI is available
+      if (!window.GoogleGenerativeAI) {
+        console.log('[handleSend] GoogleGenerativeAI not in window, attempting import...');
+        throw new Error("Google AI SDK not loaded. Please refresh the page.");
+      }
+      
+      console.log('[handleSend] Using GoogleGenerativeAI from window');
+      const GoogleGenerativeAI = window.GoogleGenerativeAI;
+      const ai = new GoogleGenerativeAI({ apiKey });
+      console.log('[handleSend] AI client initialized');
+
       const history = messages
         .filter(m => !m.isError && m.type === 'text')
         .slice(-6)
@@ -109,36 +127,39 @@ const NyayaMitra: React.FC = () => {
 
       if (imageToSend) {
         // Document Analysis Mode
-        const response = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
-          contents: {
+        console.log('[handleSend] Starting document analysis');
+        const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const response = await model.generateContent({
+          contents: [{
             parts: [
               { inlineData: { data: imageToSend.split(',')[1], mimeType: 'image/jpeg' } },
               { text: `System: Expert Legal Analyst. Task: Analyze this document for legal relevance and explain in simple terms. Context: ${textToSend || 'General Analysis'}` }
             ]
-          }
+          }]
         });
-        responseText = response.text || "Document analyzed. Please ask specific questions if needed.";
+        responseText = response.response.text() || "Document analyzed. Please ask specific questions if needed.";
+        console.log('[handleSend] Document analysis complete');
       } else {
-        // Legal Inquiry Mode with Search Grounding
-        const response = await ai.models.generateContent({
-          model: 'gemini-3-pro-preview',
-          contents: [...history, { role: 'user', parts: [{ text: textToSend }] }],
-          config: {
-            systemInstruction: "You are 'Nyaya Mitra', an elite legal advisor specializing in Indian Law. Use formal but accessible language. Always cite recent laws or judgments using the provided search tool. Disclaimer: This is not professional legal advice.",
-            tools: [{ googleSearch: {} }]
-          }
+        // Legal Inquiry Mode
+        console.log('[handleSend] Starting legal inquiry');
+        const model = ai.getGenerativeModel({ 
+          model: 'gemini-1.5-flash',
+          systemInstruction: "You are 'Nyaya Mitra', an elite legal advisor specializing in Indian Law. Use formal but accessible language. Always cite recent laws or judgments. Disclaimer: This is not professional legal advice."
+        });
+        const response = await model.generateContent({
+          contents: [...history, { role: 'user', parts: [{ text: textToSend }] }]
         });
 
-        responseText = response.text || "I'm reviewing the statutes. Could you rephrase your query?";
+        responseText = response.response.text() || "I'm reviewing the statutes. Could you rephrase your query?";
         
         // Extract Search Citations
-        const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+        const chunks = response.response.candidates?.[0]?.groundingMetadata?.groundingChunks;
         if (chunks) {
           citations = chunks
             .filter((c: any) => c.web)
             .map((c: any) => ({ uri: c.web.uri, title: c.web.title }));
         }
+        console.log('[handleSend] Legal inquiry complete, citations:', citations.length);
       }
 
       setMessages(prev => [...prev, {
@@ -149,12 +170,17 @@ const NyayaMitra: React.FC = () => {
         citations: citations.length > 0 ? citations : undefined
       }]);
     } catch (err: any) {
-      console.error("API Error:", err);
-      setError("Please check your internet connection or restart the app. The legal servers are currently busy.");
+      console.error("[handleSend] Error:", {
+        message: err?.message,
+        code: err?.code,
+        stack: err?.stack
+      });
+      const errorMsg = err?.message || "Please check your internet connection or try again.";
+      setError(errorMsg);
       setMessages(prev => [...prev, {
         id: 'err-node',
         role: 'assistant',
-        content: "ERROR: Communication with justice servers interrupted.",
+        content: "ERROR: " + errorMsg,
         type: 'text',
         isError: true
       }]);
@@ -202,24 +228,39 @@ const NyayaMitra: React.FC = () => {
     }]);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: {
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
+      console.log('[processPanicAudio] API Key present:', !!apiKey);
+      
+      if (!apiKey) throw new Error("API key not configured");
+      
+      if (!window.GoogleGenerativeAI) {
+        throw new Error("Google AI SDK not loaded");
+      }
+      
+      console.log('[processPanicAudio] Using GoogleGenerativeAI from window');
+      const GoogleGenerativeAI = window.GoogleGenerativeAI;
+      const ai = new GoogleGenerativeAI({ apiKey });
+      const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      
+      console.log('[processPanicAudio] Sending audio to API...');
+      const response = await model.generateContent({
+        contents: [{
           parts: [
             { inlineData: { data: base64Audio.split(',')[1], mimeType: 'audio/webm' } },
             { text: "EMERGENCY: Listen to this audio. Identify threats or legal violations and provide immediate safety and protocol advice for India (e.g., dial 112, relevant sections of BNS)." }
           ]
-        }
+        }]
       });
 
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: response.text || "Emergency detected. Find safety and call 112.",
+        content: response.response.text() || "Emergency detected. Find safety and call 112.",
         type: 'text'
       }]);
-    } catch (err) {
+      console.log('[processPanicAudio] Emergency response sent');
+    } catch (err: any) {
+      console.error("[processPanicAudio] Error:", err?.message);
       setError("Emergency processing failed. Dial 112 immediately.");
     } finally {
       setIsLoading(false);
@@ -307,6 +348,7 @@ const NyayaMitra: React.FC = () => {
                             key={i} 
                             href={c.uri} 
                             target="_blank" 
+                            rel="noopener noreferrer"
                             className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/50 hover:bg-amber-600/20 border border-slate-700 rounded-full text-[10px] font-bold transition-all text-slate-300 hover:text-amber-400"
                           >
                             <ExternalLink size={10} />
