@@ -98,7 +98,7 @@ def generate_legal_response(query: str, chunks: list[dict], api_key: str) -> dic
         len(chunks),
     )
 
-    client = genai.Client(api_key=api_key)
+    client = genai.Client(api_key=api_key, http_options={'timeout': 60000})
     prompt = build_prompt(query, chunks)
 
     response = client.models.generate_content(

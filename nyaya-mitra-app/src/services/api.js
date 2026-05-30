@@ -21,30 +21,44 @@ import { LEGAL_QUERY_URL, HEALTH_URL } from '../config/api';
  */
 export async function sendLegalQuery(query, apiKey) {
   const headers = { 'Content-Type': 'application/json' };
+  
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
   // Attach BYOK key only if provided — never send an empty Authorization header
   if (apiKey && apiKey.trim() !== '') {
     headers['Authorization'] = `Bearer ${apiKey.trim()}`;
   }
 
-  const response = await fetch(LEGAL_QUERY_URL, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ user_query: query }),
-  });
+  try {
+    const response = await fetch(LEGAL_QUERY_URL, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ user_query: query }),
+      signal: controller.signal,
+    });
 
-  if (!response.ok) {
-    let detail = `Server error: ${response.status}`;
-    try {
-      const body = await response.json();
-      detail = body.detail || detail;
-    } catch (_) {}
-    const err = new Error(detail);
-    err.status = response.status;
-    throw err;
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      let detail = `Server error: ${response.status}`;
+      try {
+        const body = await response.json();
+        detail = body.detail || detail;
+      } catch (_) {}
+      const err = new Error(detail);
+      err.status = response.status;
+      throw err;
+    }
+
+    return response.json();
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('Request timed out. Please check your connection and try again.');
+    }
+    throw error;
   }
-
-  return response.json();
 }
 
 /**
@@ -60,11 +74,28 @@ export async function checkHealth(apiKey) {
     headers['Authorization'] = `Bearer ${apiKey.trim()}`;
   }
 
-  const response = await fetch(HEALTH_URL, { method: 'GET', headers });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout for health
 
-  if (!response.ok) {
-    throw new Error(`Health check failed: ${response.status}`);
+  try {
+    const response = await fetch(HEALTH_URL, { 
+      method: 'GET', 
+      headers,
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`Health check failed: ${response.status}`);
+    }
+
+    return response.json();
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('Connection timed out. Server might be down or sleeping.');
+    }
+    throw error;
   }
-
-  return response.json();
 }
