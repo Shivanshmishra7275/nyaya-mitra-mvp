@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import health as health_router
 from app.api.routes import query as query_router
+from app.api.routes import admin as admin_router
 from app.core.config import get_settings
 from app.retrieval.bm25_retriever import BM25Retriever
 from app.retrieval.hybrid_retriever import HybridRetriever
@@ -120,6 +121,7 @@ def create_app() -> FastAPI:
     # ── Routes ───────────────────────────────────────────────────────────────
     app.include_router(health_router.router, prefix="")
     app.include_router(query_router.router, prefix="/api/v1")
+    app.include_router(admin_router.router, prefix="/api/v1/admin")
 
     return app
 

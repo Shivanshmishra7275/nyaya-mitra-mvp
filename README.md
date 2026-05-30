@@ -142,16 +142,19 @@ pytest tests/ -v
 
 ---
 
-## Deploy to Render (Free)
-1. Push repo to GitHub
-2. Create new "Web Service" on render.com
-3. Connect your GitHub repo
-4. Set build command: `pip install -r requirements.txt`
-5. Set start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-6. Set environment variables in Render dashboard (from `.env.example`)
-7. Deploy!
+## Deploy to Render (Free Tier)
+1. Commit your code and push the repository to GitHub.
+2. Sign in to [Render](https://render.com/) and click **New > Web Service**.
+3. Connect your GitHub repository.
+4. Render will automatically detect the `render.yaml` Blueprint file and ask you to apply it.
+5. In the Render Dashboard, go to your new Web Service > **Environment**.
+6. Set the required environment variables:
+   - `APP_ENV`: `production`
+   - `ALLOWED_ORIGINS`: (Set this to your frontend URL later once deployed)
+   - `QDRANT_ENABLED`: `false` (Render free tier does not support Docker compose. Stick to BM25 or use a managed Qdrant cloud URL).
+7. Click **Deploy**.
 
-Alternatively, use `render.yaml` for infrastructure-as-code deployment.
+> **Note**: Free instances spin down after 15 minutes of inactivity, which causes a 50-second delay on the next request. This is normal for a beta MVP.
 
 ---
 
