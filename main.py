@@ -6,21 +6,17 @@ import os
 import json
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
-import google.generativeai as genai
+from google import genai
+from typing import Optional
 from rank_bm25 import BM25Okapi
 
 # Load environment variables
 load_dotenv()
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-if not GEMINI_API_KEY:
-    raise ValueError("GEMINI_API_KEY not found in .env file. Please create one!")
-
-genai.configure(api_key=GEMINI_API_KEY)
+DEFAULT_GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -71,9 +67,9 @@ def retrieve_context(query: str, top_k: int = 15):
     top_chunks = BM25_INDEX.get_top_n(tokenized_query, VECTOR_STORE, n=top_k)
     return top_chunks
 
-def generate_legal_response(query: str, chunks: list):
-    """Real Gemini 1.5 Flash generation strictly outputting JSON."""
-    model = genai.GenerativeModel('gemini-2.5-flash')
+def generate_legal_response(query: str, chunks: list, api_key: str):
+    """Real Gemini 1.5/2.5 Flash generation strictly outputting JSON."""
+    client = genai.Client(api_key=api_key)
     
     # Combine chunks into context string
     context_text = "\n\n".join([f"Source: {c['metadata']['source']} (Page {c['metadata']['page']})\nText: {c['text']}" for c in chunks])
@@ -97,7 +93,11 @@ INSTRUCTIONS:
 3. DO NOT wrap the JSON in markdown. Return ONLY the raw JSON string.
 """
     
-    response = model.generate_content(prompt, generation_config={"temperature": 0.2})
+    response = client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=prompt,
+        config={"temperature": 0.2}
+    )
     raw_text = response.text.strip()
     
     # Clean up markdown if Gemini adds it accidentally
@@ -109,8 +109,15 @@ INSTRUCTIONS:
     return json.loads(raw_text.strip())
 
 @app.post("/api/v1/legal-query", response_model=QueryResponse)
-async def legal_query(request: QueryRequest):
+async def legal_query(request: QueryRequest, authorization: Optional[str] = Header(None)):
     logger.info(f"Real Query received: {request.user_query}")
+    
+    api_key = DEFAULT_GEMINI_API_KEY
+    if authorization and authorization.startswith("Bearer "):
+        api_key = authorization.split("Bearer ")[1].strip()
+        
+    if not api_key:
+        raise HTTPException(status_code=401, detail="No Gemini API Key provided. Set GEMINI_API_KEY in .env or pass Authorization header.")
     try:
         # Retrieve real context
         relevant_chunks = retrieve_context(request.user_query)
@@ -119,7 +126,7 @@ async def legal_query(request: QueryRequest):
             raise HTTPException(status_code=404, detail="No relevant legal text found.")
             
         # Generate real answer with Gemini
-        response_data = generate_legal_response(request.user_query, relevant_chunks)
+        response_data = generate_legal_response(request.user_query, relevant_chunks, api_key)
         
         return response_data
         
