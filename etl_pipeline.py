@@ -1,18 +1,27 @@
 """
 etl_pipeline.py
 ================
-Nyaya Mitra - Legal AI ETL Pipeline
---------------------------------------
-Extract  : Loads raw legal PDFs from the Raw_Data directory via PyPDFLoader.
-Transform : Splits documents into overlapping chunks with RecursiveCharacterTextSplitter.
-            Preserves source filename in chunk metadata for citation tracking.
-            Attaches a mock embedding vector to every chunk.
-Load      : Serialises all processed chunks to vector_store_mock.json.
+Nyaya Mitra — Legal AI ETL Pipeline (v2)
+-----------------------------------------
+Changes from v1:
+  - Mock embeddings REMOVED entirely.
+  - Dynamic PDF scanning: no more hardcoded filenames.
+    Automatically picks up all .pdf files in Raw_Data/.
+  - Chunk output simplified (no embedding field stored).
+  - Metadata enriched: source, page (1-indexed for humans), start_index, chunk_index.
+
+Future: Add --qdrant flag to also push embeddings to Qdrant for semantic retrieval.
+        For now, BM25 is the primary retrieval mode.
+
+Usage:
+    python etl_pipeline.py               # scans Raw_Data/, writes vector_store_mock.json
+    python etl_pipeline.py --dir ./data  # custom input dir
 """
 
+import argparse
 import json
 import logging
-import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -23,20 +32,11 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 # Configuration
 # ---------------------------------------------------------------------------
 
-RAW_DATA_DIR = Path("Raw_Data")
-OUTPUT_FILE  = Path("vector_store_mock.json")
+DEFAULT_RAW_DATA_DIR = Path("Raw_Data")
+DEFAULT_OUTPUT_FILE = Path("vector_store_mock.json")
 
-# Chunking strategy for legal texts:
-# • chunk_size=1000  — large enough to capture a full legal sub-section or
-#                      article without losing meaning.
-# • chunk_overlap=200 — ~20 % overlap ensures a sentence spanning a chunk
-#                        boundary appears in both neighbours, so no clause
-#                        is silently truncated during retrieval.
-CHUNK_SIZE    = 1000
-CHUNK_OVERLAP = 200
-
-# PDFs to ingest (order is preserved in the output).
-PDF_FILES = ["bns.pdf", "bnss.pdf", "bsa.pdf", "const.pdf"]
+CHUNK_SIZE = 1000    # characters — enough for a full legal sub-section
+CHUNK_OVERLAP = 200  # ~20% overlap ensures boundary clauses are not truncated
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -51,64 +51,47 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Mock Embedding
+# Extract — Dynamic PDF scanning
 # ---------------------------------------------------------------------------
 
-def get_mock_embedding(text: str) -> list[float]:
+def discover_pdfs(pdf_dir: Path) -> list[Path]:
     """
-    Placeholder embedding function.
-    Returns a constant 3-dimensional vector for every input text.
-
-    TODO: Replace with a real embedding model, e.g.
-          - openai.embeddings.create(input=text, model="text-embedding-3-small")
-          - SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+    Dynamically discover all .pdf files in pdf_dir (non-recursive).
+    Replaces the old hardcoded PDF_FILES list.
     """
-    return [0.1, 0.2, 0.3]
+    pdfs = sorted(pdf_dir.glob("*.pdf"))
+    if not pdfs:
+        logger.warning("No PDF files found in '%s'", pdf_dir)
+    else:
+        logger.info("Discovered %d PDF(s): %s", len(pdfs), [p.name for p in pdfs])
+    return pdfs
 
 
-# ---------------------------------------------------------------------------
-# Extract
-# ---------------------------------------------------------------------------
-
-def extract_documents(pdf_dir: Path, pdf_files: list[str]) -> list[Any]:
+def extract_documents(pdf_dir: Path) -> list[Any]:
     """
-    Load all PDFs in *pdf_files* from *pdf_dir* using LangChain's PyPDFLoader.
-    Each page is returned as a LangChain Document object.
-
-    The source field in metadata is normalised to just the filename (e.g. 'bns.pdf')
-    so downstream citation logic works independently of the ingestion path.
-
-    Returns a flat list of Document objects across all PDFs.
+    Load all PDFs found in pdf_dir using LangChain's PyPDFLoader.
+    Each page becomes a LangChain Document object.
+    Source metadata is normalised to just the filename.
     """
     all_documents = []
+    pdfs = discover_pdfs(pdf_dir)
 
-    for filename in pdf_files:
-        pdf_path = pdf_dir / filename
-
-        if not pdf_path.exists():
-            logger.warning("PDF not found — skipping: %s", pdf_path)
-            continue
-
+    for pdf_path in pdfs:
         try:
-            logger.info("Loading: %s", pdf_path)
-            loader    = PyPDFLoader(str(pdf_path))
+            logger.info("Loading: %s", pdf_path.name)
+            loader = PyPDFLoader(str(pdf_path))
             documents = loader.load()
 
-            # Normalise the source field to the bare filename so every chunk
-            # from bns.pdf carries  metadata['source'] == 'bns.pdf', regardless
-            # of where the script is executed from.
             for doc in documents:
-                doc.metadata["source"] = filename
+                # Normalise source to bare filename for consistent citation labels
+                doc.metadata["source"] = pdf_path.name
 
             all_documents.extend(documents)
-            logger.info("  -> %d page(s) loaded from '%s'", len(documents), filename)
-
+            logger.info("  -> %d page(s) from '%s'", len(documents), pdf_path.name)
         except Exception as exc:
-            logger.error(
-                "Failed to load '%s': %s", filename, exc, exc_info=True
-            )
+            logger.error("Failed to load '%s': %s", pdf_path.name, exc, exc_info=True)
 
-    logger.info("Extraction complete. Total pages loaded: %d", len(all_documents))
+    logger.info("Extraction complete. Total pages: %d", len(all_documents))
     return all_documents
 
 
@@ -118,92 +101,61 @@ def extract_documents(pdf_dir: Path, pdf_files: list[str]) -> list[Any]:
 
 def transform_documents(documents: list[Any]) -> list[dict]:
     """
-    Split raw Document pages into semantically meaningful chunks and attach
-    mock embeddings.
-
-    Chunking rationale
-    ------------------
-    RecursiveCharacterTextSplitter splits on ['\n\n', '\n', ' ', ''] in order,
-    preserving paragraph and sentence boundaries wherever possible.  This is
-    far preferable to a naive fixed-width split for legal text, which relies
-    heavily on numbered sections (e.g. "Section 302 IPC") and sub-clauses.
-
-    chunk_size=1000
-        Keeps each vector small enough for an LLM prompt window while still
-        containing enough context for meaningful similarity retrieval.
-
-    chunk_overlap=200
-        Consecutive chunks share 200 characters, so a statutory condition that
-        straddles a boundary is present in at least one chunk in full.
-
-    Returns a list of dicts ready for JSON serialisation.
+    Split document pages into overlapping chunks.
+    No mock embeddings. No useless constant vectors.
+    Metadata fields: source, page (1-indexed), start_index, chunk_id.
     """
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE,
         chunk_overlap=CHUNK_OVERLAP,
-        # length_function=len uses character count (not tokens), which is
-        # consistent and library-agnostic.  Swap to tiktoken if you need
-        # token-level precision aligned to a specific model's context window.
         length_function=len,
-        add_start_index=True,  # records char offset of chunk within its parent page
+        add_start_index=True,
     )
 
     chunks = splitter.split_documents(documents)
-    logger.info("Chunking complete. Total chunks produced: %d", len(chunks))
+    logger.info("Chunking complete. Total chunks: %d", len(chunks))
 
-    processed_chunks: list[dict] = []
-
+    processed: list[dict] = []
     for idx, chunk in enumerate(chunks):
         try:
-            embedding = get_mock_embedding(chunk.page_content)
+            meta = dict(chunk.metadata)
+            # Convert page to 1-indexed integer for human-readable citations
+            raw_page = meta.get("page", 0)
+            meta["page"] = int(raw_page) + 1 if isinstance(raw_page, (int, float)) else raw_page
 
-            processed_chunks.append({
-                "chunk_id" : idx,
-                "text"     : chunk.page_content,
-                # metadata contains at minimum: source (filename), page (0-indexed),
-                # and start_index (character offset inside the page).
-                "metadata" : chunk.metadata,
-                "embedding": embedding,
+            processed.append({
+                "chunk_id": idx,
+                "text": chunk.page_content,
+                "metadata": meta,
+                # NOTE: No embedding stored. BM25 works on raw text.
+                # When Qdrant is added, embeddings are computed and pushed there, not here.
             })
-
         except Exception as exc:
             logger.error(
-                "Failed to process chunk %d from '%s': %s",
-                idx, chunk.metadata.get("source", "unknown"), exc, exc_info=True,
+                "Failed to process chunk %d: %s", idx, exc, exc_info=True
             )
 
-    logger.info(
-        "Transform complete. Chunks successfully processed: %d", len(processed_chunks)
-    )
-    return processed_chunks
+    logger.info("Transform complete. Processed chunks: %d", len(processed))
+    return processed
 
 
 # ---------------------------------------------------------------------------
 # Load
 # ---------------------------------------------------------------------------
 
-def load_to_json(processed_chunks: list[dict], output_path: Path) -> None:
+def load_to_json(chunks: list[dict], output_path: Path) -> None:
     """
-    Serialise the processed chunks to a JSON file as our mock vector store.
-
-    In production this step would be replaced by upserts into a real vector
-    database (e.g. Pinecone, Weaviate, Qdrant, or pgvector).
+    Write the processed chunks to a JSON file.
+    This is the BM25 retrieval store — no real vector DB required.
     """
     try:
         output_path.parent.mkdir(parents=True, exist_ok=True)
-
         with open(output_path, "w", encoding="utf-8") as fh:
-            json.dump(processed_chunks, fh, ensure_ascii=False, indent=2)
-
-        logger.info(
-            "Load complete. %d chunks written to '%s'",
-            len(processed_chunks), output_path,
-        )
-
+            json.dump(chunks, fh, ensure_ascii=False, indent=2)
+        logger.info("Wrote %d chunks to '%s' (%.1f MB)", len(chunks), output_path,
+                    output_path.stat().st_size / 1_048_576)
     except OSError as exc:
-        logger.error(
-            "Failed to write output file '%s': %s", output_path, exc, exc_info=True
-        )
+        logger.error("Failed to write '%s': %s", output_path, exc, exc_info=True)
         raise
 
 
@@ -211,35 +163,48 @@ def load_to_json(processed_chunks: list[dict], output_path: Path) -> None:
 # Pipeline Orchestrator
 # ---------------------------------------------------------------------------
 
-def run_pipeline() -> None:
-    """
-    Entry point.  Executes the three ETL stages in sequence:
-        Extract  ->  Transform  ->  Load
-    """
+def run_pipeline(raw_data_dir: Path, output_file: Path) -> None:
     logger.info("=" * 60)
-    logger.info("Nyaya Mitra — Legal AI ETL Pipeline   START")
+    logger.info("Nyaya Mitra — ETL Pipeline v2   START")
+    logger.info("Input:  %s", raw_data_dir.resolve())
+    logger.info("Output: %s", output_file.resolve())
     logger.info("=" * 60)
 
-    # 1. Extract — load raw PDF pages
-    documents = extract_documents(RAW_DATA_DIR, PDF_FILES)
+    documents = extract_documents(raw_data_dir)
     if not documents:
-        logger.error("No documents were loaded. Aborting pipeline.")
-        return
+        logger.error("No documents loaded. Aborting.")
+        sys.exit(1)
 
-    # 2. Transform — chunk, enrich metadata, embed
-    processed_chunks = transform_documents(documents)
-    if not processed_chunks:
-        logger.error("No chunks were produced. Aborting pipeline.")
-        return
+    chunks = transform_documents(documents)
+    if not chunks:
+        logger.error("No chunks produced. Aborting.")
+        sys.exit(1)
 
-    # 3. Load — persist to mock vector store
-    load_to_json(processed_chunks, OUTPUT_FILE)
+    load_to_json(chunks, output_file)
 
     logger.info("=" * 60)
-    logger.info("Nyaya Mitra — Legal AI ETL Pipeline   COMPLETE")
-    logger.info("Output : %s", OUTPUT_FILE.resolve())
+    logger.info("Nyaya Mitra — ETL Pipeline v2   COMPLETE")
+    logger.info("Chunks: %d  |  Run the API server to use them.", len(chunks))
     logger.info("=" * 60)
 
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    run_pipeline()
+    parser = argparse.ArgumentParser(description="Nyaya Mitra ETL Pipeline")
+    parser.add_argument(
+        "--dir",
+        type=Path,
+        default=DEFAULT_RAW_DATA_DIR,
+        help="Directory containing legal PDF files (default: Raw_Data/)",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=DEFAULT_OUTPUT_FILE,
+        help="Output JSON file path (default: vector_store_mock.json)",
+    )
+    args = parser.parse_args()
+    run_pipeline(args.dir, args.output)

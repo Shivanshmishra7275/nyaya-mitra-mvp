@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: nyaya-mitra-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: ALLOWED_ORIGINS
+        sync: false   # Set this in Render dashboard to your frontend URL
+      - key: GEMINI_API_KEY
+        sync: false   # Set in Render dashboard — optional, BYOK preferred
+      - key: QDRANT_ENABLED
+        value: false
