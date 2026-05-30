@@ -28,6 +28,9 @@ python-dotenv>=1.0.0
 pytest>=8.0.0
 httpx>=0.27.0           # Required by FastAPI TestClient
 
-# ── Optional: Semantic retrieval (uncomment when adding Qdrant support) ───────
-# sentence-transformers>=3.0.0
-# qdrant-client>=1.9.0
+# ── Optional: Semantic retrieval (requires Docker for Qdrant) ──────────────────
+# Enabled by setting QDRANT_ENABLED=true in .env
+# Run Qdrant: docker run -p 6333:6333 qdrant/qdrant
+# Then ingest: python etl_pipeline.py --qdrant
+sentence-transformers>=3.0.0   # local embedding model, ~22 MB, no API cost
+qdrant-client>=1.9.0            # Qdrant vector DB client (connects to local or cloud)

@@ -56,14 +56,21 @@ async def lifespan(app: FastAPI):
     qdrant = None
     if settings.QDRANT_ENABLED:
         try:
-            from app.retrieval.qdrant_retriever import QdrantRetriever  # type: ignore
+            from app.retrieval.qdrant_retriever import QdrantRetriever
             qdrant = QdrantRetriever(
                 host=settings.QDRANT_HOST,
                 port=settings.QDRANT_PORT,
                 collection=settings.QDRANT_COLLECTION,
             )
-            qdrant.load()
-            logger.info("Qdrant semantic retriever loaded.")
+            ok = qdrant.load()
+            if ok:
+                logger.info("Qdrant semantic retriever loaded — hybrid mode active.")
+            else:
+                logger.warning(
+                    "Qdrant retriever loaded but collection missing. "
+                    "Run: python etl_pipeline.py --qdrant"
+                )
+                qdrant = None
         except Exception as exc:
             logger.warning("Qdrant init failed — using BM25-only: %s", exc)
             qdrant = None

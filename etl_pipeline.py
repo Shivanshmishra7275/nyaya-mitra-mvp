@@ -7,15 +7,22 @@ Changes from v1:
   - Mock embeddings REMOVED entirely.
   - Dynamic PDF scanning: no more hardcoded filenames.
     Automatically picks up all .pdf files in Raw_Data/.
-  - Chunk output simplified (no embedding field stored).
-  - Metadata enriched: source, page (1-indexed for humans), start_index, chunk_index.
-
-Future: Add --qdrant flag to also push embeddings to Qdrant for semantic retrieval.
-        For now, BM25 is the primary retrieval mode.
+  - Chunk output simplified — metadata: source, page (1-indexed), start_index, chunk_id.
+  - Optional --qdrant flag: computes real sentence-transformer embeddings and
+    upserts them into Qdrant for hybrid semantic retrieval.
 
 Usage:
-    python etl_pipeline.py               # scans Raw_Data/, writes vector_store_mock.json
-    python etl_pipeline.py --dir ./data  # custom input dir
+    # BM25-only (fast, no model download):
+    python etl_pipeline.py
+
+    # BM25 + Qdrant semantic (downloads ~22 MB model on first run):
+    python etl_pipeline.py --qdrant
+
+    # Custom directories:
+    python etl_pipeline.py --dir ./data --output ./store.json
+
+    # Run Qdrant locally first:
+    docker run -p 6333:6333 qdrant/qdrant
 """
 
 import argparse
@@ -127,8 +134,8 @@ def transform_documents(documents: list[Any]) -> list[dict]:
                 "chunk_id": idx,
                 "text": chunk.page_content,
                 "metadata": meta,
-                # NOTE: No embedding stored. BM25 works on raw text.
-                # When Qdrant is added, embeddings are computed and pushed there, not here.
+                # No embedding stored in JSON — BM25 works on raw text.
+                # Embeddings for Qdrant are computed separately in ingest_to_qdrant().
             })
         except Exception as exc:
             logger.error(
@@ -137,6 +144,95 @@ def transform_documents(documents: list[Any]) -> list[dict]:
 
     logger.info("Transform complete. Processed chunks: %d", len(processed))
     return processed
+
+
+# ---------------------------------------------------------------------------
+# Optional: Qdrant ingestion (real embeddings)
+# ---------------------------------------------------------------------------
+
+def ingest_to_qdrant(
+    chunks: list[dict],
+    host: str = "localhost",
+    port: int = 6333,
+    collection: str = "nyaya_legal_chunks",
+    batch_size: int = 64,
+) -> None:
+    """
+    Encode all chunks with a local sentence-transformer model and upsert into Qdrant.
+
+    Model: all-MiniLM-L6-v2
+      - 22 MB download on first run, then cached locally.
+      - 384-dimensional float32 vectors.
+      - Runs fully offline — no API key, no quota.
+
+    Qdrant must be running before calling this:
+      docker run -p 6333:6333 qdrant/qdrant
+    """
+    try:
+        from sentence_transformers import SentenceTransformer  # noqa: PLC0415
+        from qdrant_client import QdrantClient  # noqa: PLC0415
+        from qdrant_client.models import Distance, VectorParams, PointStruct  # noqa: PLC0415
+    except ImportError:
+        logger.error(
+            "sentence-transformers or qdrant-client not installed. "
+            "Run: pip install sentence-transformers qdrant-client"
+        )
+        raise
+
+    EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+    EMBEDDING_DIM = 384
+
+    logger.info("Loading embedding model: %s", EMBEDDING_MODEL)
+    model = SentenceTransformer(EMBEDDING_MODEL)
+
+    logger.info("Connecting to Qdrant at %s:%s", host, port)
+    client = QdrantClient(host=host, port=port)
+
+    # Create or recreate collection
+    existing = [c.name for c in client.get_collections().collections]
+    if collection in existing:
+        logger.warning("Recreating existing Qdrant collection '%s'", collection)
+        client.delete_collection(collection)
+
+    client.create_collection(
+        collection_name=collection,
+        vectors_config=VectorParams(size=EMBEDDING_DIM, distance=Distance.COSINE),
+    )
+    logger.info("Qdrant collection '%s' created.", collection)
+
+    # Encode and upsert in batches
+    texts = [c["text"] for c in chunks]
+    total = len(texts)
+    logger.info("Encoding %d chunks (batch_size=%d)...", total, batch_size)
+
+    points = []
+    for i in range(0, total, batch_size):
+        batch_texts = texts[i : i + batch_size]
+        batch_chunks = chunks[i : i + batch_size]
+
+        # normalize_embeddings=True ensures cosine similarity works correctly
+        embeddings = model.encode(batch_texts, normalize_embeddings=True, show_progress_bar=False)
+
+        for j, (chunk, vector) in enumerate(zip(batch_chunks, embeddings)):
+            points.append(
+                PointStruct(
+                    id=chunk["chunk_id"],
+                    vector=vector.tolist(),
+                    payload={
+                        "chunk_id": chunk["chunk_id"],
+                        "text": chunk["text"],
+                        "metadata": chunk["metadata"],
+                    },
+                )
+            )
+
+        logger.info("  Encoded %d / %d chunks...", min(i + batch_size, total), total)
+
+    client.upsert(collection_name=collection, points=points)
+    logger.info(
+        "Qdrant upsert complete. %d vectors in collection '%s'.",
+        len(points), collection,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -163,11 +259,19 @@ def load_to_json(chunks: list[dict], output_path: Path) -> None:
 # Pipeline Orchestrator
 # ---------------------------------------------------------------------------
 
-def run_pipeline(raw_data_dir: Path, output_file: Path) -> None:
+def run_pipeline(
+    raw_data_dir: Path,
+    output_file: Path,
+    enable_qdrant: bool = False,
+    qdrant_host: str = "localhost",
+    qdrant_port: int = 6333,
+    qdrant_collection: str = "nyaya_legal_chunks",
+) -> None:
     logger.info("=" * 60)
     logger.info("Nyaya Mitra — ETL Pipeline v2   START")
     logger.info("Input:  %s", raw_data_dir.resolve())
     logger.info("Output: %s", output_file.resolve())
+    logger.info("Qdrant: %s", "ENABLED" if enable_qdrant else "disabled (BM25-only)")
     logger.info("=" * 60)
 
     documents = extract_documents(raw_data_dir)
@@ -180,11 +284,24 @@ def run_pipeline(raw_data_dir: Path, output_file: Path) -> None:
         logger.error("No chunks produced. Aborting.")
         sys.exit(1)
 
+    # Always write the BM25 JSON store
     load_to_json(chunks, output_file)
+
+    # Optionally push to Qdrant for semantic retrieval
+    if enable_qdrant:
+        logger.info("Starting Qdrant ingestion...")
+        ingest_to_qdrant(
+            chunks,
+            host=qdrant_host,
+            port=qdrant_port,
+            collection=qdrant_collection,
+        )
 
     logger.info("=" * 60)
     logger.info("Nyaya Mitra — ETL Pipeline v2   COMPLETE")
-    logger.info("Chunks: %d  |  Run the API server to use them.", len(chunks))
+    logger.info("Chunks: %d", len(chunks))
+    if enable_qdrant:
+        logger.info("Qdrant collection '%s' is ready for semantic retrieval.", qdrant_collection)
     logger.info("=" * 60)
 
 
@@ -193,7 +310,19 @@ def run_pipeline(raw_data_dir: Path, output_file: Path) -> None:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Nyaya Mitra ETL Pipeline")
+    parser = argparse.ArgumentParser(
+        description="Nyaya Mitra ETL Pipeline",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python etl_pipeline.py                      # BM25-only (fast)
+  python etl_pipeline.py --qdrant             # BM25 + Qdrant (requires Docker)
+  python etl_pipeline.py --dir ./mypdfs       # custom input dir
+
+For Qdrant, start the service first:
+  docker run -p 6333:6333 qdrant/qdrant
+"""
+    )
     parser.add_argument(
         "--dir",
         type=Path,
@@ -206,5 +335,24 @@ if __name__ == "__main__":
         default=DEFAULT_OUTPUT_FILE,
         help="Output JSON file path (default: vector_store_mock.json)",
     )
+    parser.add_argument(
+        "--qdrant",
+        action="store_true",
+        default=False,
+        help="Also ingest into Qdrant for semantic retrieval (requires qdrant-client + sentence-transformers)",
+    )
+    parser.add_argument("--qdrant-host", default="localhost", help="Qdrant host (default: localhost)")
+    parser.add_argument("--qdrant-port", type=int, default=6333, help="Qdrant port (default: 6333)")
+    parser.add_argument(
+        "--qdrant-collection", default="nyaya_legal_chunks",
+        help="Qdrant collection name (default: nyaya_legal_chunks)",
+    )
     args = parser.parse_args()
-    run_pipeline(args.dir, args.output)
+    run_pipeline(
+        raw_data_dir=args.dir,
+        output_file=args.output,
+        enable_qdrant=args.qdrant,
+        qdrant_host=args.qdrant_host,
+        qdrant_port=args.qdrant_port,
+        qdrant_collection=args.qdrant_collection,
+    )

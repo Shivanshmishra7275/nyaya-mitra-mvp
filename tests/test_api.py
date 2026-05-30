@@ -5,17 +5,23 @@ Nyaya Mitra backend tests.
 Run with: pytest tests/ -v
 
 Tests cover:
-  - /health endpoint
+  - /health endpoint (including retrieval_mode field)
   - /version endpoint
   - /api/v1/legal-query input validation
   - /api/v1/legal-query missing API key (401)
   - BM25 retriever unit test
+  - HybridRetriever BM25-only path
+  - QdrantRetriever graceful failure (returns [] when Qdrant is unreachable)
+  - E2E smoke path: /health → BM25 retrieve → LLM skipped (no key required for retrieval)
 """
 import pytest
+from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
 
 from app.main import app
 from app.retrieval.bm25_retriever import BM25Retriever
+from app.retrieval.hybrid_retriever import HybridRetriever
+from app.retrieval.qdrant_retriever import QdrantRetriever
 
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -102,3 +108,94 @@ def test_bm25_retriever_loads_and_retrieves():
     for chunk in results:
         assert "text" in chunk
         assert "metadata" in chunk
+
+
+# ─── HybridRetriever BM25-only path ──────────────────────────────────────────
+
+def test_hybrid_retriever_bm25_only():
+    """HybridRetriever without Qdrant returns BM25 results and correct mode note."""
+    bm25 = BM25Retriever(store_path="vector_store_mock.json")
+    bm25.load()
+    hybrid = HybridRetriever(bm25=bm25, qdrant_retriever=None)
+
+    results, note = hybrid.retrieve("murder punishment BNS", top_k=5)
+    assert isinstance(results, list)
+    assert len(results) <= 5
+    assert "BM25-only" in note
+    assert "Retrieved" in note
+
+
+# ─── QdrantRetriever graceful failure ─────────────────────────────────────────
+
+def test_qdrant_retriever_returns_empty_when_unreachable():
+    """
+    QdrantRetriever.retrieve() must return an empty list (not raise)
+    when Qdrant is not running. This ensures HybridRetriever always degrades
+    gracefully to BM25-only.
+    """
+    retriever = QdrantRetriever(host="localhost", port=19999)  # intentionally wrong port
+    # load() will fail but should not raise — returns False
+    ok = retriever.load()
+    assert ok is False
+    assert not retriever.is_ready
+
+    # retrieve() on an unready retriever must return [] not raise
+    results = retriever.retrieve("theft")
+    assert results == []
+
+
+# ─── HybridRetriever with failing Qdrant degrades to BM25 ────────────────────
+
+def test_hybrid_retriever_degrades_when_qdrant_fails():
+    """
+    If the Qdrant retriever is wired but fails during retrieve(),
+    HybridRetriever must still return BM25 results.
+    """
+    bm25 = BM25Retriever(store_path="vector_store_mock.json")
+    bm25.load()
+
+    # Mock a Qdrant retriever that always raises on retrieve()
+    bad_qdrant = MagicMock()
+    bad_qdrant.retrieve.side_effect = RuntimeError("Qdrant timeout")
+
+    hybrid = HybridRetriever(bm25=bm25, qdrant_retriever=bad_qdrant)
+    results, note = hybrid.retrieve("theft punishment", top_k=5)
+
+    # Should still return BM25 results
+    assert len(results) > 0
+    assert "unavailable" in note or "BM25" in note
+
+
+# ─── E2E smoke: health + BM25 retrieval path ──────────────────────────────────
+
+def test_e2e_smoke_health_and_retrieval_path(client):
+    """
+    End-to-end smoke test:
+    1. /health returns 200 with chunks_loaded > 0
+    2. The retrieval system is wired and returning results for a real query
+       (LLM step is not tested here — requires a live API key)
+    """
+    # Step 1: health check confirms server and retrieval are ready
+    health = client.get("/health")
+    assert health.status_code == 200
+    body = health.json()
+    assert body["status"] == "ok"
+    assert body["chunks_loaded"] > 0, (
+        "No chunks loaded — run: python etl_pipeline.py"
+    )
+    assert body["retrieval_mode"] in (
+        "BM25-only",
+        "Hybrid (BM25 + Semantic)",
+        "BM25-only (Qdrant unavailable)",
+    )
+
+    # Step 2: retrieval path directly (bypass LLM)
+    retriever = BM25Retriever(store_path="vector_store_mock.json")
+    retriever.load()
+    results = retriever.retrieve("theft punishment section BNS", top_k=3)
+    assert len(results) > 0, "BM25 returned no results for a common legal query"
+    # Each result must have text + metadata (source, page) for citation
+    for chunk in results:
+        assert "text" in chunk and len(chunk["text"]) > 10
+        assert "metadata" in chunk
+        assert "source" in chunk["metadata"]
