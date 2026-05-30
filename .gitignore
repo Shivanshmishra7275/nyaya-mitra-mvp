@@ -1,0 +1,22 @@
+# Nyaya Mitra — Root .gitignore
+
+# ── Secrets (NEVER commit these) ─────────────────────────────────────────────
+.env
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# ── Data / generated artefacts ───────────────────────────────────────────────
+vector_store_mock.json
+Raw_Data/
+
+# ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
