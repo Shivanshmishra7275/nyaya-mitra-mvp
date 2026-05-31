@@ -22,6 +22,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useChat } from '../hooks/useChat';
 import { useServerHealth } from '../hooks/useServerHealth';
 import { UserBubble, AiCard } from '../components/ChatBubble';
+import { WelcomeCard } from '../components/WelcomeCard';
 import { ApiKeyModal } from '../components/ApiKeyModal';
 import { loadKeySecurely } from '../services/keyStorage';
 import { COLORS } from '../theme/colors';
@@ -31,8 +32,7 @@ export default function ChatScreen() {
   const [keyModalVisible, setKeyModalVisible] = useState(false);
   const [inputText, setInputText] = useState('');
 
-  // Load persisted API key from SECURE storage on mount (opt-in by user in modal)
-  // Chat history is loaded separately inside useChat via AsyncStorage.
+  // Load persisted API key from secure storage on mount
   useEffect(() => {
     loadKeySecurely()
       .then((saved) => { if (saved) setApiKey(saved); })
@@ -48,12 +48,16 @@ export default function ChatScreen() {
     clearChat,
   } = useChat(apiKey);
 
-  // Server connectivity — polls every 30s, shows banner proactively
+  // Server connectivity — polls every 30s
   const { isConnected, serverInfo, checkNow } = useServerHealth(apiKey);
 
-  const handleSend = () => {
-    if (!inputText.trim() || isLoading) return;
-    sendMessage(inputText.trim());
+  // Show WelcomeCard when only the welcome system message is present
+  const hasUserMessages = messages.some((m) => m.role !== 'assistant' || m.id !== 'welcome');
+
+  const handleSend = (text) => {
+    const query = (text || inputText).trim();
+    if (!query || isLoading) return;
+    sendMessage(query);
     setInputText('');
   };
 
@@ -65,16 +69,12 @@ export default function ChatScreen() {
   };
 
   const renderItem = ({ item }) => {
+    if (item.id === 'welcome') return null; // hidden — WelcomeCard shows instead
     if (item.role === 'user') return <UserBubble text={item.content} />;
     if (item.role === 'error') return <AiCard content={item.content} onRetry={retryLast} />;
     return <AiCard content={item.content} />;
   };
 
-  // Server status pill color logic
-  const statusColor =
-    isConnected === null ? '#94A3B8' :   // checking — grey
-    isConnected ? '#22C55E' :             // connected — green
-    '#EF4444';                            // disconnected — red
   const statusLabel =
     isConnected === null ? '⏳' :
     isConnected ? '🟢' :
@@ -84,7 +84,7 @@ export default function ChatScreen() {
     <SafeAreaView style={styles.safe}>
       <StatusBar style="light" backgroundColor={COLORS.brandDark} />
 
-      {/* ── Header ───────────────────────────────────────────────────────── */}
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Text style={styles.logo}>⚖️</Text>
@@ -94,70 +94,87 @@ export default function ChatScreen() {
           </View>
         </View>
         <View style={styles.headerActions}>
-          {/* Server status dot — tap to re-check */}
+          {/* Server status — tap to re-check */}
           <Pressable
-            style={styles.statusDot}
+            style={styles.iconBtn}
             onPress={checkNow}
-            accessibilityLabel={`Server ${isConnected ? 'connected' : 'disconnected'}. Tap to re-check.`}
+            accessibilityLabel={`Server ${isConnected ? 'connected' : 'disconnected'}. Tap to recheck.`}
           >
-            <Text style={{ fontSize: 14 }}>{statusLabel}</Text>
+            <Text style={styles.iconBtnText}>{statusLabel}</Text>
           </Pressable>
-          {/* API Key button */}
+          {/* API Key */}
           <Pressable
             style={[styles.iconBtn, apiKey ? styles.iconBtnActive : null]}
             onPress={() => setKeyModalVisible(true)}
-            accessibilityLabel="Set API Key"
+            accessibilityLabel="Set Gemini API Key"
           >
             <Text style={styles.iconBtnText}>🔑</Text>
           </Pressable>
           {/* Clear chat */}
-          <Pressable style={styles.iconBtn} onPress={handleClearChat} accessibilityLabel="Clear chat">
-            <Text style={styles.iconBtnText}>🗑</Text>
-          </Pressable>
+          {hasUserMessages && (
+            <Pressable style={styles.iconBtn} onPress={handleClearChat} accessibilityLabel="Clear chat">
+              <Text style={styles.iconBtnText}>🗑</Text>
+            </Pressable>
+          )}
         </View>
       </View>
 
-      {/* ── Server offline banner ─────────────────────────────────────────── */}
+      {/* ── Offline banner ─────────────────────────────────────────────────── */}
       {isConnected === false && (
         <Pressable style={styles.offlineBanner} onPress={checkNow}>
           <Text style={styles.offlineText}>
-            📡 Cannot reach server. Tap to retry. · Check EXPO_PUBLIC_API_BASE_URL
+            📡 Cannot reach server — tap to retry
           </Text>
         </Pressable>
       )}
 
-      {/* ── No key warning ───────────────────────────────────────────────── */}
-      {!apiKey && (
+      {/* ── No key banner ──────────────────────────────────────────────────── */}
+      {!apiKey && hasUserMessages && (
         <Pressable style={styles.noKeyBanner} onPress={() => setKeyModalVisible(true)}>
           <Text style={styles.noKeyText}>
-            🔑 Tap here to enter your Gemini API key to start chatting
+            🔑 Tap to enter your Gemini API key
           </Text>
         </Pressable>
       )}
 
-      {/* ── Chat area ────────────────────────────────────────────────────── */}
+      {/* ── Chat area ──────────────────────────────────────────────────────── */}
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
       >
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          contentContainerStyle={styles.messageList}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-          ListFooterComponent={
-            isLoading ? (
-              <View style={styles.typingRow}>
-                <ActivityIndicator size="small" color={COLORS.brandAccent} />
-                <Text style={styles.typingText}> Nyaya Mitra is thinking…</Text>
-              </View>
-            ) : null
-          }
-        />
+        {/* Welcome screen (first launch) */}
+        {!hasUserMessages ? (
+          <WelcomeCard
+            onSampleQuery={(query) => {
+              setInputText(query);
+              if (apiKey) {
+                handleSend(query);
+              } else {
+                setKeyModalVisible(true);
+              }
+            }}
+          />
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            keyExtractor={(item) => item.id}
+            renderItem={renderItem}
+            contentContainerStyle={styles.messageList}
+            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+            ListFooterComponent={
+              isLoading ? (
+                <View style={styles.typingRow}>
+                  <ActivityIndicator size="small" color={COLORS.brandAccent} />
+                  <Text style={styles.typingText}> Nyaya Mitra is thinking…</Text>
+                </View>
+              ) : null
+            }
+          />
+        )}
 
-        {/* ── Input bar ────────────────────────────────────────────────── */}
+        {/* ── Input bar ──────────────────────────────────────────────────── */}
         <View style={styles.inputBar}>
           <TextInput
             style={styles.textInput}
@@ -168,14 +185,15 @@ export default function ChatScreen() {
             multiline
             maxLength={1000}
             returnKeyType="send"
-            onSubmitEditing={handleSend}
+            blurOnSubmit={false}
+            onSubmitEditing={() => handleSend()}
           />
           <Pressable
             style={[
               styles.sendBtn,
               (!inputText.trim() || isLoading) && styles.sendBtnDisabled,
             ]}
-            onPress={handleSend}
+            onPress={() => handleSend()}
             disabled={!inputText.trim() || isLoading}
             accessibilityLabel="Send message"
           >
@@ -188,7 +206,7 @@ export default function ChatScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* ── BYOK Modal ───────────────────────────────────────────────────── */}
+      {/* ── BYOK Modal ─────────────────────────────────────────────────────── */}
       <ApiKeyModal
         visible={keyModalVisible}
         currentKey={apiKey}
@@ -203,7 +221,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.brandDark },
   flex: { flex: 1 },
 
-  // Header
+  // ── Header ────────────────────────────────────────────────────────────────
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -219,14 +237,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: '700', color: COLORS.textOnDark },
   subtitle: { fontSize: 11, color: COLORS.textOnBrand, marginTop: 1 },
   headerActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  statusDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: COLORS.brandMid,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+
   iconBtn: {
     width: 36,
     height: 36,
@@ -235,10 +246,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconBtnActive: { backgroundColor: '#1B5E20' },
-  iconBtnText: { fontSize: 16 },
+  iconBtnActive: { backgroundColor: '#1B5E20' }, // green — key saved
+  iconBtnText: { fontSize: 15 },
 
-  // Offline banner
+  // ── Banners ───────────────────────────────────────────────────────────────
   offlineBanner: {
     backgroundColor: '#FEE2E2',
     paddingHorizontal: 16,
@@ -246,7 +257,6 @@ const styles = StyleSheet.create({
   },
   offlineText: { fontSize: 12, color: '#991B1B', textAlign: 'center' },
 
-  // No key banner
   noKeyBanner: {
     backgroundColor: '#FFF3CD',
     paddingHorizontal: 16,
@@ -254,7 +264,7 @@ const styles = StyleSheet.create({
   },
   noKeyText: { fontSize: 13, color: '#856404', textAlign: 'center' },
 
-  // Messages
+  // ── Messages ──────────────────────────────────────────────────────────────
   messageList: {
     flexGrow: 1,
     backgroundColor: COLORS.screenBg,
@@ -274,10 +284,15 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginTop: 4,
     marginBottom: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 1,
   },
   typingText: { color: COLORS.textSecondary, fontSize: 14, fontStyle: 'italic' },
 
-  // Input bar
+  // ── Input bar ─────────────────────────────────────────────────────────────
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -293,7 +308,7 @@ const styles = StyleSheet.create({
     minHeight: 42,
     maxHeight: 120,
     backgroundColor: COLORS.inputBg,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: COLORS.inputBorder,
     borderRadius: 21,
     paddingHorizontal: 16,

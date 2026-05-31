@@ -28,8 +28,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-secure-store",
-      "expo-clipboard"
+      "expo-secure-store"
     ]
   }
 }
