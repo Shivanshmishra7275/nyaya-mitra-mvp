@@ -7,11 +7,18 @@ SECURITY NOTES:
   - The raw API key is NEVER logged. Only the first/last 4 chars are logged for audit.
   - The key is used per-request and discarded immediately after the call.
   - The key is never stored, cached, or returned in any response.
+
+ASYNC NOTES:
+  - `generate_legal_response` is a coroutine (async def).
+  - The blocking Gemini SDK call is wrapped in asyncio.to_thread() so it does NOT
+    block the event loop. With 2 Uvicorn workers, failing to do this would freeze
+    all other requests for up to 60 seconds per LLM call.
+  - The retry backoff uses asyncio.sleep(), not time.sleep().
 """
+import asyncio
 import json
 import logging
 import re
-import time
 
 from google import genai
 
@@ -94,14 +101,30 @@ def _extract_json_from_response(raw_text: str) -> str:
     return raw_text
 
 
-def generate_legal_response(
+def _call_gemini_sync(client: genai.Client, prompt: str) -> str:
+    """
+    Synchronous Gemini call — intended to be run in a thread via asyncio.to_thread().
+    Isolated here so the async wrapper stays clean.
+    """
+    response = client.models.generate_content(
+        model=settings.GEMINI_MODEL,
+        contents=prompt,
+        config={"temperature": settings.LLM_TEMPERATURE},
+    )
+    return response.text
+
+
+async def generate_legal_response(
     query: str,
     chunks: list[dict],
     api_key: str,
     max_retries: int = 2,
 ) -> dict:
     """
-    Call Gemini with the constructed prompt and return parsed JSON.
+    Async coroutine — call Gemini with the constructed prompt and return parsed JSON.
+
+    The blocking Gemini SDK call is offloaded to a thread pool via asyncio.to_thread()
+    so it never stalls the event loop.
 
     Args:
         query:       The user's legal question (already validated).
@@ -131,13 +154,9 @@ def generate_legal_response(
     last_exc = None
     for attempt in range(1, max_retries + 1):
         try:
-            response = client.models.generate_content(
-                model=settings.GEMINI_MODEL,
-                contents=prompt,
-                config={"temperature": settings.LLM_TEMPERATURE},
-            )
+            # Offload the blocking SDK call to a thread — does NOT block event loop
+            raw_text = await asyncio.to_thread(_call_gemini_sync, client, prompt)
 
-            raw_text = response.text
             if not raw_text:
                 raise ValueError("LLM returned an empty response.")
 
@@ -166,12 +185,12 @@ def generate_legal_response(
             logger.info("LLM call successful on attempt %d.", attempt)
             return result
 
-        except ValueError:
-            # JSON parsing error — retry once with backoff
-            last_exc = ValueError
+        except ValueError as exc:
+            # JSON parsing error — retry once with async backoff (does NOT block event loop)
+            last_exc = exc  # store the instance, not the class
             if attempt < max_retries:
                 logger.warning("Retrying LLM call in 2s (attempt %d/%d)...", attempt, max_retries)
-                time.sleep(2)
+                await asyncio.sleep(2)  # ← asyncio.sleep, not time.sleep
             continue
 
         except Exception as exc:

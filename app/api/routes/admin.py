@@ -2,21 +2,61 @@
 app/api/routes/admin.py
 ========================
 Admin and debug endpoints for verifying retrieval corpus readiness.
+
+SECURITY:
+  All endpoints require the X-Admin-Secret header to match the ADMIN_SECRET env var.
+  If ADMIN_SECRET is not set, all admin endpoints are disabled (return 404) in
+  production and are only open in development (with a warning).
 """
 import random
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from app.core.config import get_settings
 
 router = APIRouter()
 settings = get_settings()
 
 
-@router.get("/debug/corpus", tags=["Admin"])
+def _verify_admin_secret(x_admin_secret: str = Header(None, alias="X-Admin-Secret")) -> None:
+    """
+    Dependency: validates the X-Admin-Secret header.
+
+    In production: requires ADMIN_SECRET env var to be set and matching.
+    In development: allows access with a warning if ADMIN_SECRET is not configured.
+    """
+    admin_secret = settings.ADMIN_SECRET
+
+    # Completely disable admin routes in production if secret is not configured
+    if settings.APP_ENV == "production" and not admin_secret:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Not found.",  # Don't reveal endpoint exists
+        )
+
+    # If secret is configured, always enforce it regardless of environment
+    if admin_secret:
+        if not x_admin_secret or x_admin_secret != admin_secret:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or missing X-Admin-Secret header.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    else:
+        # Development-only: no secret configured — allow but warn
+        import logging
+        logging.getLogger(__name__).warning(
+            "ADMIN_SECRET not set — admin endpoints are open. "
+            "Set ADMIN_SECRET env var before deploying to production."
+        )
+
+
+@router.get("/debug/corpus", tags=["Admin"], dependencies=[Depends(_verify_admin_secret)])
 async def debug_corpus(request: Request):
     """
     Returns statistics about the currently loaded retrieval corpus.
     Provides a quick way to verify that PDFs were parsed and loaded correctly
     in the production environment.
+
+    Requires: X-Admin-Secret header matching ADMIN_SECRET env var.
     """
     retriever = getattr(request.app.state, "retriever", None)
     if not retriever:
@@ -60,11 +100,13 @@ async def debug_corpus(request: Request):
     }
 
 
-@router.get("/debug/config", tags=["Admin"])
+@router.get("/debug/config", tags=["Admin"], dependencies=[Depends(_verify_admin_secret)])
 async def debug_config():
     """
     Returns non-sensitive configuration values for debugging.
     Never exposes API keys or secrets.
+
+    Requires: X-Admin-Secret header matching ADMIN_SECRET env var.
     """
     return {
         "app_name": settings.APP_NAME,
@@ -81,4 +123,5 @@ async def debug_config():
         "cors_origins": settings.cors_origins,
         # Key presence only — never the actual key value
         "server_api_key_set": bool(settings.GEMINI_API_KEY),
+        "admin_secret_set": bool(settings.ADMIN_SECRET),
     }

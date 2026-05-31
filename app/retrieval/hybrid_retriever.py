@@ -7,11 +7,20 @@ Architecture:
   Retriever A → BM25Retriever      (lexical, always available, zero infra)
   Retriever B → QdrantRetriever    (semantic, optional, requires Qdrant service)
 
-Merging strategy:
+Merging strategy — Reciprocal Rank Fusion (RRF):
   - Collect top_k results from each active retriever.
-  - Deduplicate by chunk_id.
-  - BM25 results are slightly preferred (appear first after dedup).
-  - When Qdrant is disabled, falls back to BM25-only with a retrieval_note.
+  - For each chunk, compute its RRF score:  1 / (k + rank)  where k=60 (standard).
+  - Sum RRF scores across retrievers for chunks that appear in both.
+  - Sort by combined RRF score descending and cap at top_k.
+
+  RRF is the industry-standard rank fusion method. It outperforms simple
+  concatenation because a chunk that ranks 12th in BM25 but 1st semantically
+  will correctly surface above a chunk that's 1st in BM25 but absent semantically.
+
+  Reference: Cormack et al. (2009), "Reciprocal Rank Fusion outperforms Condorcet
+  and individual Rank Learning Methods" — SIGIR 2009.
+
+When Qdrant is disabled: falls back to BM25-only with a retrieval_note.
 """
 import logging
 from typing import Optional
@@ -20,10 +29,17 @@ from app.retrieval.bm25_retriever import BM25Retriever
 
 logger = logging.getLogger(__name__)
 
+RRF_K = 60  # Standard RRF constant — higher = smoother, lower = more aggressive reranking
+
+
+def _rrf_score(rank: int, k: int = RRF_K) -> float:
+    """Reciprocal Rank Fusion score for a result at position `rank` (0-indexed)."""
+    return 1.0 / (k + rank + 1)  # +1 for 0-indexing
+
 
 class HybridRetriever:
     """
-    Orchestrates BM25 + optional Qdrant semantic retrieval.
+    Orchestrates BM25 + optional Qdrant semantic retrieval with RRF score fusion.
     Call `retrieve()` — it always returns results even if Qdrant is down.
     """
 
@@ -37,40 +53,74 @@ class HybridRetriever:
 
     def retrieve(self, query: str, top_k: int = 15) -> tuple[list[dict], str]:
         """
-        Retrieve top_k chunks using hybrid search.
+        Retrieve top_k chunks using Reciprocal Rank Fusion of BM25 + optional semantic.
 
         Returns:
             (chunks, retrieval_note) — note describes which retrievers fired.
         """
         bm25_results = self._bm25.retrieve(query, top_k=top_k)
-        seen_ids: set = set()
-        merged: list[dict] = []
 
-        # Add BM25 results first
-        for chunk in bm25_results:
-            cid = chunk.get("chunk_id", id(chunk))
-            if cid not in seen_ids:
-                seen_ids.add(cid)
-                merged.append(chunk)
+        # BM25-only path (fast, no Qdrant)
+        if self._qdrant is None:
+            note = f"Retrieved {len(bm25_results[:top_k])} chunks via BM25-only."
+            logger.info(note)
+            return bm25_results[:top_k], note
 
-        mode = "BM25-only"
+        # Try hybrid path with RRF
+        try:
+            semantic_results = self._qdrant.retrieve(query, top_k=top_k)
+            merged = _apply_rrf(bm25_results, semantic_results, top_k=top_k)
+            note = f"Retrieved {len(merged)} chunks via Hybrid (BM25 + Semantic, RRF fusion)."
+            logger.info(note)
+            return merged, note
 
-        # Optionally layer in Qdrant semantic results
-        if self._qdrant is not None:
-            try:
-                semantic_results = self._qdrant.retrieve(query, top_k=top_k)
-                for chunk in semantic_results:
-                    cid = chunk.get("chunk_id", id(chunk))
-                    if cid not in seen_ids:
-                        seen_ids.add(cid)
-                        merged.append(chunk)
-                mode = "Hybrid (BM25 + Semantic)"
-            except Exception as exc:
-                logger.warning("Qdrant retrieval failed, falling back to BM25: %s", exc)
-                mode = "BM25-only (Qdrant unavailable)"
+        except Exception as exc:
+            logger.warning("Qdrant retrieval failed, falling back to BM25: %s", exc)
+            fallback = bm25_results[:top_k]
+            note = f"Retrieved {len(fallback)} chunks via BM25-only (Qdrant unavailable)."
+            logger.info(note)
+            return fallback, note
 
-        # Cap at top_k
-        final = merged[:top_k]
-        note = f"Retrieved {len(final)} chunks via {mode}."
-        logger.info(note)
-        return final, note
+
+def _apply_rrf(
+    primary_results: list[dict],
+    secondary_results: list[dict],
+    top_k: int,
+) -> list[dict]:
+    """
+    Merge two ranked result lists using Reciprocal Rank Fusion.
+
+    Chunks are identified by their chunk_id. Chunks appearing in both lists
+    accumulate RRF scores from both rankings, naturally surfacing to the top.
+    Chunks unique to one retriever still appear, scored by their single-list rank.
+
+    Args:
+        primary_results:   BM25 results, in rank order (best first).
+        secondary_results: Semantic results, in rank order (best first).
+        top_k:             Maximum number of results to return.
+
+    Returns:
+        Merged list sorted by RRF score descending, capped at top_k.
+    """
+    # chunk_id → (rrf_score, chunk_dict)
+    scores: dict = {}
+
+    def _get_id(chunk: dict) -> object:
+        return chunk.get("chunk_id", id(chunk))
+
+    # Score BM25 results
+    for rank, chunk in enumerate(primary_results):
+        cid = _get_id(chunk)
+        scores[cid] = [_rrf_score(rank), chunk]
+
+    # Score semantic results — add to existing score if chunk appeared in BM25
+    for rank, chunk in enumerate(secondary_results):
+        cid = _get_id(chunk)
+        if cid in scores:
+            scores[cid][0] += _rrf_score(rank)  # accumulate
+        else:
+            scores[cid] = [_rrf_score(rank), chunk]
+
+    # Sort by descending RRF score and return the chunk dicts
+    ranked = sorted(scores.values(), key=lambda x: x[0], reverse=True)
+    return [chunk for _, chunk in ranked[:top_k]]

@@ -60,7 +60,10 @@ export function useChat(apiKey) {
 
   // ── Persist history on change ─────────────────────────────────────────────
   const persistMessages = useCallback((msgs) => {
-    const toStore = msgs.slice(-MAX_STORED_MESSAGES);
+    // Error messages are transient — don't persist them across sessions
+    const toStore = msgs
+      .filter((m) => m.role !== 'error')
+      .slice(-MAX_STORED_MESSAGES);
     AsyncStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(toStore)).catch((e) =>
       console.warn('Failed to save chat history:', e)
     );

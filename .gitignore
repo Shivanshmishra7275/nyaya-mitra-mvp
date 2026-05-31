@@ -19,8 +19,14 @@ nyaya-mitra-app/node_modules/
 nyaya-mitra-app/.expo/
 nyaya-mitra-app/web-build/
 
-# ── Data / generated artefacts ───────────────────────────────────────────────
+# ── Data / generated artefacts ───────────────────────────────────────────────────
 Raw_Data/
+# Generated BM25 chunk store — large JSON, rebuild with: python etl_pipeline.py
+# Never commit — grows with corpus, corrupts Git history permanently.
+vector_store_mock.json
+# Also catch any custom-named output stores
+*_store.json
+*_chunks.json
 
 # ── OS ───────────────────────────────────────────────────────────────────────
 .DS_Store

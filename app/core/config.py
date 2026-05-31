@@ -20,6 +20,15 @@ class Settings(BaseSettings):
     # Leave blank in production to force BYOK.
     GEMINI_API_KEY: Optional[str] = None
 
+    # ── Admin endpoints ──────────────────────────────────────────────────────
+    # Set a strong random secret in production: openssl rand -hex 32
+    # If not set: admin routes are disabled in production, open (with warning) in dev.
+    ADMIN_SECRET: Optional[str] = None
+
+    # ── Rate limiting ────────────────────────────────────────────────────────
+    # Max requests per minute per IP on the /legal-query endpoint.
+    RATE_LIMIT_PER_MINUTE: int = 10
+
     # ── CORS ──────────────────────────────────────────────────────────────────
     # Comma-separated list of allowed origins.
     # In production, set this to your actual frontend URL(s).

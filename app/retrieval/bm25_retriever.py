@@ -6,12 +6,25 @@ This is Retriever A in the hybrid pipeline.
 """
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Optional
 
 from rank_bm25 import BM25Okapi
 
 logger = logging.getLogger(__name__)
+
+
+def _tokenize(text: str) -> list[str]:
+    """
+    Tokenize text for BM25 indexing and querying.
+
+    Uses regex \\b word-boundary matching instead of whitespace split so that:
+      - Punctuation is stripped: "theft." == "theft", "section," == "section"
+      - Numbers are preserved: "section 378" -> ["section", "378"]
+      - Consistent tokenization between index-time and query-time
+    """
+    return re.findall(r'\b\w+\b', text.lower())
 
 
 class BM25Retriever:
@@ -39,7 +52,7 @@ class BM25Retriever:
             with open(self._store_path, "r", encoding="utf-8") as f:
                 self._chunks = json.load(f)
 
-            corpus = [chunk["text"].lower().split() for chunk in self._chunks]
+            corpus = [_tokenize(chunk["text"]) for chunk in self._chunks]
             self._index = BM25Okapi(corpus)
             self._loaded = True
             logger.info(
@@ -66,6 +79,6 @@ class BM25Retriever:
             logger.warning("BM25 retriever not ready — returning empty results.")
             return []
 
-        tokenized = query.lower().split()
+        tokenized = _tokenize(query)
         # BM25Okapi.get_top_n returns the actual document dicts
         return self._index.get_top_n(tokenized, self._chunks, n=top_k)

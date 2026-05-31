@@ -12,6 +12,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from app.api.routes import health as health_router
 from app.api.routes import query as query_router
@@ -19,6 +22,11 @@ from app.api.routes import admin as admin_router
 from app.core.config import get_settings
 from app.retrieval.bm25_retriever import BM25Retriever
 from app.retrieval.hybrid_retriever import HybridRetriever
+
+# ---------------------------------------------------------------------------
+# Rate limiter — shared singleton, mounted on app.state so routes can use it
+# ---------------------------------------------------------------------------
+limiter = Limiter(key_func=get_remote_address)
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -78,6 +86,8 @@ async def lifespan(app: FastAPI):
 
     # Wire the hybrid retriever into app.state so routes can access it
     app.state.retriever = HybridRetriever(bm25=bm25, qdrant_retriever=qdrant)
+    # Wire the rate limiter into app.state so the @limiter.limit decorator works
+    app.state.limiter = limiter
 
     logger.info("=== Nyaya Mitra API ready ===")
     yield
@@ -101,6 +111,9 @@ def create_app() -> FastAPI:
         docs_url="/docs" if settings.APP_ENV != "production" else None,
         redoc_url="/redoc" if settings.APP_ENV != "production" else None,
     )
+
+    # ── Rate limiting ─────────────────────────────────────────────────────────
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
     # ── CORS ─────────────────────────────────────────────────────────────────
     # In development: allow all origins for convenience.

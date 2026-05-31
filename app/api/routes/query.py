@@ -15,6 +15,8 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Header, Request, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.core.config import get_settings
 from app.models.schemas import QueryRequest, QueryResponse
@@ -24,6 +26,8 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 router = APIRouter()
+# Reuse the limiter singleton registered on app.state in main.py
+limiter = Limiter(key_func=get_remote_address)
 
 
 def _extract_api_key(authorization: Optional[str]) -> Optional[str]:
@@ -53,13 +57,15 @@ def _extract_api_key(authorization: Optional[str]) -> Optional[str]:
         401: {"description": "No API key provided"},
         404: {"description": "No relevant legal text found"},
         422: {"description": "Request validation error"},
+        429: {"description": "Rate limit exceeded"},
         502: {"description": "LLM returned an invalid response"},
         500: {"description": "Internal server error"},
     },
 )
+@limiter.limit(lambda: f"{settings.RATE_LIMIT_PER_MINUTE}/minute")
 async def legal_query(
     request_body: QueryRequest,
-    raw_request: Request,
+    request: Request,
     authorization: Optional[str] = Header(None),
 ):
     # ── Resolve API key: BYOK takes priority over server default ─────────────
@@ -76,7 +82,7 @@ async def legal_query(
         )
 
     # ── Retrieval ─────────────────────────────────────────────────────────────
-    retriever = getattr(raw_request.app.state, "retriever", None)
+    retriever = getattr(request.app.state, "retriever", None)
 
     if retriever is None:
         raise HTTPException(
@@ -94,7 +100,7 @@ async def legal_query(
 
     # ── LLM Generation ───────────────────────────────────────────────────────
     try:
-        response_data = generate_legal_response(
+        response_data = await generate_legal_response(
             query=request_body.user_query,
             chunks=chunks,
             api_key=api_key,

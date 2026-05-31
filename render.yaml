@@ -13,5 +13,9 @@ services:
         sync: false   # Set this in Render dashboard to your frontend URL
       - key: GEMINI_API_KEY
         sync: false   # Set in Render dashboard — optional, BYOK preferred
+      - key: ADMIN_SECRET
+        sync: false   # Generate: openssl rand -hex 32 — required for admin endpoints
       - key: QDRANT_ENABLED
         value: false
+      - key: RATE_LIMIT_PER_MINUTE
+        value: 10     # Requests per minute per IP on /legal-query

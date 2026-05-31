@@ -5,6 +5,7 @@
 # ── FastAPI & ASGI ────────────────────────────────────────────────────────────
 fastapi>=0.111.0
 uvicorn[standard]>=0.30.0
+slowapi>=0.1.9             # Per-IP rate limiting on the query endpoint
 
 # ── Pydantic settings (env-driven config) ─────────────────────────────────────
 pydantic-settings>=2.0.0
