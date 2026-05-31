@@ -47,28 +47,39 @@ def build_prompt(query: str, chunks: list[dict]) -> str:
 
     context_text = "\n\n---\n\n".join(context_parts)
 
-    return f"""You are Nyaya Mitra, an AI legal guide for Indian law.
-Use ONLY the following legal context to answer the user's query.
+    return f"""You are Nyaya Mitra, an Indian Criminal Case Intelligence Assistant.
+Your goal is to turn the user's messy fact scenario into a structured legal strategy.
+Use ONLY the following legal context (from BNS, BNSS, BSA) to answer the user's query.
 Do not use any outside knowledge.
 
 CONTEXT:
 {context_text}
 
-USER QUERY: {query}
+USER QUERY (FACTS): {query}
 
-DISCLAIMER: You are an AI assistant providing legal information, not legal advice.
-Users should consult a qualified lawyer for their specific situation.
+DISCLAIMER: You are an AI assistant providing legal intelligence, not legal advice.
 
 INSTRUCTIONS:
 1. Base your answer strictly on the provided context.
 2. Output your response as a valid, raw JSON object exactly matching this schema:
 {{
-    "explanation": "Clear, plain-language explanation of the law based on context.",
-    "citations": ["List of sources (e.g., 'BNS Page 14')"],
-    "suggested_next_steps": ["Actionable advice 1", "Actionable advice 2"]
+    "legal_mapping": ["List of applicable legal sections (e.g., 'BNS Sec 378')"],
+    "explanation": "Clear, plain-language explanation of how the law applies to these facts.",
+    "weaknesses": ["List of identified weak points, contradictions, or missing evidence in the user's facts"],
+    "strategy_paths": [
+        {{
+            "path_name": "Name of the strategy (e.g., 'Anticipatory Bail Route')",
+            "when_suitable": "When this path is best.",
+            "benefit": "Primary benefit.",
+            "risk": "Primary risk."
+        }}
+    ],
+    "lawyer_brief": "A concise, structured summary of the facts, issues, and goals, ready to be handed to a human lawyer.",
+    "citations": ["List of sources used (e.g., 'BNS Page 14')"]
 }}
 3. DO NOT wrap the JSON in markdown or code blocks. Return ONLY the raw JSON string.
-4. If the context does not contain enough information, say so honestly in the explanation field.
+4. Focus on identifying missing evidence, opponent perspectives, and realistic strategic options.
+5. If the context does not contain enough information, note this explicitly in the 'weaknesses' and 'explanation' fields.
 """
 
 
@@ -172,15 +183,30 @@ async def generate_legal_response(
                 raise ValueError(f"LLM returned malformed JSON: {exc}") from exc
 
             # Validate required keys are present
-            required = {"explanation", "citations", "suggested_next_steps"}
+            required = {"legal_mapping", "explanation", "weaknesses", "strategy_paths", "lawyer_brief", "citations"}
             missing = required - result.keys()
             if missing:
                 logger.warning(
                     "LLM JSON missing expected keys: %s. Filling with defaults.", missing
                 )
-                result.setdefault("explanation", "")
+                result.setdefault("legal_mapping", [])
+                result.setdefault("explanation", "Could not generate an explanation.")
+                result.setdefault("weaknesses", [])
+                result.setdefault("strategy_paths", [])
+                result.setdefault("lawyer_brief", "Could not generate brief.")
                 result.setdefault("citations", [])
-                result.setdefault("suggested_next_steps", [])
+
+            # Ensure strategy_paths is a list of dicts
+            if not isinstance(result.get("strategy_paths"), list):
+                result["strategy_paths"] = []
+            
+            for path in result["strategy_paths"]:
+                if not isinstance(path, dict):
+                    continue
+                path.setdefault("path_name", "Unknown Strategy")
+                path.setdefault("when_suitable", "Unknown")
+                path.setdefault("benefit", "Unknown")
+                path.setdefault("risk", "Unknown")
 
             logger.info("LLM call successful on attempt %d.", attempt)
             return result

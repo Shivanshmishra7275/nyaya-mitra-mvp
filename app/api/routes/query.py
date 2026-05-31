@@ -119,8 +119,11 @@ async def legal_query(
         ) from exc
 
     return QueryResponse(
+        legal_mapping=response_data.get("legal_mapping", []),
         explanation=response_data.get("explanation", ""),
+        weaknesses=response_data.get("weaknesses", []),
+        strategy_paths=response_data.get("strategy_paths", []),
+        lawyer_brief=response_data.get("lawyer_brief", ""),
         citations=response_data.get("citations", []),
-        suggested_next_steps=response_data.get("suggested_next_steps", []),
         retrieval_note=retrieval_note,
     )

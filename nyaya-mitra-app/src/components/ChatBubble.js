@@ -45,20 +45,21 @@ export function AiCard({ content, onRetry }) {
     );
   }
 
-  const { explanation = '', citations = [], suggested_next_steps = [], retrieval_note } = content;
+  const { 
+    legal_mapping = [],
+    explanation = '', 
+    weaknesses = [],
+    strategy_paths = [],
+    lawyer_brief = '',
+    citations = [], 
+    retrieval_note 
+  } = content;
 
   const validCitations = citations.filter((c) => typeof c === 'string' && c.trim().length > 0);
-  const validSteps = suggested_next_steps.filter((s) => typeof s === 'string' && s.trim().length > 0);
+  const validMappings = legal_mapping.filter((m) => typeof m === 'string' && m.trim().length > 0);
 
-  const handleCopy = async () => {
-    const fullText = [
-      explanation,
-      validCitations.length ? '\nSources:\n' + validCitations.join('\n') : '',
-      validSteps.length ? '\nNext Steps:\n' + validSteps.join('\n') : '',
-    ]
-      .filter(Boolean)
-      .join('\n');
-    await Clipboard.setStringAsync(fullText);
+  const handleCopyBrief = async () => {
+    await Clipboard.setStringAsync(lawyer_brief);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -67,10 +68,7 @@ export function AiCard({ content, onRetry }) {
     <View style={styles.aiCard}>
       {/* Header row */}
       <View style={styles.cardHeader}>
-        <Text style={styles.badge}>⚖️ NYAYA MITRA</Text>
-        <Pressable onPress={handleCopy} style={styles.copyBtn} accessibilityLabel="Copy answer">
-          <Text style={styles.copyText}>{copied ? '✓ Copied' : '⎘ Copy'}</Text>
-        </Pressable>
+        <Text style={styles.badge}>⚖️ NYAYA MITRA INTELLIGENCE</Text>
       </View>
 
       {/* Legal disclaimer */}
@@ -80,8 +78,56 @@ export function AiCard({ content, onRetry }) {
         </Text>
       </View>
 
+      {/* Legal Mapping (GPS) */}
+      {validMappings.length > 0 && (
+        <View style={styles.mappingRow}>
+          <Text style={styles.mappingIcon}>📍</Text>
+          <Text style={styles.mappingText}>{validMappings.join(' • ')}</Text>
+        </View>
+      )}
+
       {/* Main explanation */}
       <Text style={styles.explanation}>{explanation}</Text>
+
+      {/* Weaknesses Alert */}
+      {weaknesses.length > 0 && (
+        <View style={styles.weaknessBox}>
+          <Text style={styles.weaknessTitle}>⚠️ CASE WEAKNESSES & GAPS</Text>
+          {weaknesses.map((weakness, i) => (
+            <Text key={i} style={styles.weaknessItem}>• {weakness}</Text>
+          ))}
+        </View>
+      )}
+
+      {/* Strategy Paths */}
+      {strategy_paths.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>🧭 STRATEGY OPTIONS</Text>
+          {strategy_paths.map((path, i) => (
+            <View key={i} style={styles.strategyCard}>
+              <Text style={styles.strategyName}>{path.path_name}</Text>
+              <Text style={styles.strategyDetail}><Text style={styles.bold}>When:</Text> {path.when_suitable}</Text>
+              <Text style={styles.strategyDetail}><Text style={styles.bold}>Benefit:</Text> {path.benefit}</Text>
+              <Text style={styles.strategyDetail}><Text style={styles.bold}>Risk:</Text> {path.risk}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Lawyer Brief */}
+      {lawyer_brief ? (
+        <View style={styles.section}>
+          <View style={styles.briefHeader}>
+            <Text style={styles.sectionLabel}>💼 LAWYER CONSULTATION BRIEF</Text>
+            <Pressable onPress={handleCopyBrief} style={styles.copyBtn} accessibilityLabel="Copy brief">
+              <Text style={styles.copyText}>{copied ? '✓ Copied' : '⎘ Copy Brief'}</Text>
+            </Pressable>
+          </View>
+          <View style={styles.briefBox}>
+            <Text style={styles.briefText}>{lawyer_brief}</Text>
+          </View>
+        </View>
+      ) : null}
 
       {/* Citations */}
       {validCitations.length > 0 && (
@@ -94,21 +140,6 @@ export function AiCard({ content, onRetry }) {
               </View>
             ))}
           </View>
-        </View>
-      )}
-
-      {/* Suggested next steps */}
-      {validSteps.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>✅ SUGGESTED NEXT STEPS</Text>
-          {validSteps.map((step, i) => (
-            <View key={i} style={styles.stepRow}>
-              <View style={styles.stepBullet}>
-                <Text style={styles.stepNum}>{i + 1}</Text>
-              </View>
-              <Text style={styles.stepText}>{step}</Text>
-            </View>
-          ))}
         </View>
       )}
 
@@ -195,7 +226,24 @@ const styles = StyleSheet.create({
   },
   disclaimerText: { fontSize: 10, color: '#7B6900', lineHeight: 14 },
 
-  explanation: { fontSize: 15, color: COLORS.textPrimary, lineHeight: 23 },
+  mappingRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, backgroundColor: '#E3F2FD', padding: 8, borderRadius: 8 },
+  mappingIcon: { fontSize: 14, marginRight: 6 },
+  mappingText: { fontSize: 12, color: '#0277BD', fontWeight: '600', flexShrink: 1 },
+
+  explanation: { fontSize: 15, color: COLORS.textPrimary, lineHeight: 23, marginBottom: 12 },
+
+  weaknessBox: { backgroundColor: '#FFEBEE', padding: 12, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: '#FFCDD2' },
+  weaknessTitle: { fontSize: 11, fontWeight: '700', color: '#C62828', marginBottom: 6 },
+  weaknessItem: { fontSize: 13, color: '#B71C1C', lineHeight: 20 },
+
+  strategyCard: { backgroundColor: '#FAFAFA', borderWidth: 1, borderColor: '#EEEEEE', borderRadius: 8, padding: 10, marginBottom: 8 },
+  strategyName: { fontSize: 14, fontWeight: '700', color: COLORS.brandDark, marginBottom: 4 },
+  strategyDetail: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 18, marginBottom: 2 },
+  bold: { fontWeight: '600', color: COLORS.textPrimary },
+
+  briefHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  briefBox: { backgroundColor: '#F5F5F5', padding: 12, borderRadius: 8, borderLeftWidth: 3, borderLeftColor: COLORS.brandAccent },
+  briefText: { fontSize: 14, color: '#424242', lineHeight: 20, fontStyle: 'italic' },
 
   section: {
     marginTop: 14,
@@ -203,6 +251,7 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.divider,
     paddingTop: 10,
   },
+
   sectionLabel: {
     fontSize: 10,
     fontWeight: '700',
@@ -221,19 +270,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   pillText: { color: COLORS.citationText, fontSize: 12, fontWeight: '700' },
-
-  stepRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8, gap: 8 },
-  stepBullet: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: COLORS.brandAccent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  stepNum: { color: COLORS.textOnDark, fontSize: 11, fontWeight: '700' },
-  stepText: { flex: 1, fontSize: 14, color: COLORS.textPrimary, lineHeight: 21 },
 
   retrievalNote: {
     fontSize: 10,

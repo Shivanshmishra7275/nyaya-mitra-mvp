@@ -23,11 +23,17 @@ const LAW_TOPICS = [
 ];
 
 const SAMPLE_QUERIES = [
-  'What is the punishment for theft under BNS?',
-  'What are my rights if I am arrested?',
-  'How is bail granted under BNSS?',
-  'What evidence is admissible in court?',
+  'My neighbour threatened me after hitting my car. I don\'t have a video. What should I do?',
+  'Someone filed a fake FIR against my brother for theft. He was out of town. What is our strategy?',
+  'I was scammed online by a fake investment site. What sections apply and how to file?',
 ];
+
+const FeatureItem = ({ icon, text }) => (
+  <View style={styles.featureItem}>
+    <Text style={styles.featureIcon}>{icon}</Text>
+    <Text style={styles.featureText}>{text}</Text>
+  </View>
+);
 
 export function WelcomeCard({ onSampleQuery }) {
   return (
@@ -41,20 +47,17 @@ export function WelcomeCard({ onSampleQuery }) {
         <Text style={styles.heroIcon}>⚖️</Text>
         <Text style={styles.heroTitle}>Namaste 🙏</Text>
         <Text style={styles.heroSubtitle}>
-          I am <Text style={styles.heroAccent}>Nyaya Mitra</Text>, your free AI legal
-          guide for Indian law.
+          I am <Text style={styles.heroAccent}>Nyaya Mitra</Text>, your AI Case
+          Intelligence Assistant for Indian law.
         </Text>
       </View>
 
-      {/* What I cover */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>📚 What I Cover</Text>
-        {LAW_TOPICS.map((t) => (
-          <View key={t.label} style={styles.topicRow}>
-            <Text style={styles.topicIcon}>{t.icon}</Text>
-            <Text style={styles.topicLabel}>{t.label}</Text>
-          </View>
-        ))}
+      {/* Features */}
+      <View style={styles.features}>
+        <FeatureItem icon="📍" text="Maps facts to BNS, BNSS, BSA sections" />
+        <FeatureItem icon="⚠️" text="Finds weaknesses & missing evidence" />
+        <FeatureItem icon="🧭" text="Suggests strategic legal paths" />
+        <FeatureItem icon="💼" text="Generates a structured lawyer brief" />
       </View>
 
       {/* Try asking */}
@@ -144,17 +147,26 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  // Topics
-  topicRow: {
+  // Features
+  features: {
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  featureItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingVertical: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    paddingVertical: 2,
   },
-  topicIcon: { fontSize: 18, width: 28 },
-  topicLabel: { fontSize: 14, color: COLORS.textPrimary, flex: 1, lineHeight: 20 },
+  featureIcon: { fontSize: 18, width: 24, textAlign: 'center' },
+  featureText: { fontSize: 13, color: COLORS.textPrimary, flex: 1, lineHeight: 18, fontWeight: '500' },
 
   // Sample queries
   sampleBtn: {

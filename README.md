@@ -1,8 +1,23 @@
-# Nyaya Mitra ⚖️ — AI Legal Guide for Indian Law
+# Nyaya Mitra ⚖️ — Indian Criminal Case Intelligence Assistant
 
-> **100% Free · Open Source · Zero Running Cost · Bring Your Own Key**
+> **From messy facts to structured legal strategy.** 
+> **100% Free · Open Source · Bring Your Own Key**
 
-Nyaya Mitra is an AI-powered legal assistant for Indian law, covering the **Bharatiya Nyaya Sanhita (BNS)**, **Bharatiya Nagarik Suraksha Sanhita (BNSS)**, **Bharatiya Sakshya Adhiniyam (BSA)**, and the **Constitution of India**.
+Nyaya Mitra is not just another legal chatbot. It is a structured **Case Intelligence Assistant** specifically built for India's new criminal laws: the **Bharatiya Nyaya Sanhita (BNS)**, **Bharatiya Nagarik Suraksha Sanhita (BNSS)**, and **Bharatiya Sakshya Adhiniyam (BSA)**.
+
+Instead of generic Q&A, Nyaya Mitra converts a user's raw story into a structured legal action plan.
+
+---
+
+## 🎯 The Wedge: Why Nyaya Mitra is Unique
+
+While most legal AI tools compete on database size and act like generic search engines, Nyaya Mitra focuses on **Decision Support Quality**:
+
+1. **Intelligent Case Intake:** Accepts messy, incomplete human stories instead of requiring precise legal queries.
+2. **Legal GPS & Mapping:** Instantly maps your facts to the applicable BNS/BNSS sections.
+3. **Weakness Scanner:** Identifies what might weaken your matter (e.g., lack of documents, missing evidence, contradictions).
+4. **Strategy Paths:** Generates 2-4 strategic options (e.g., Complaint Route, Settlement Route) comparing Benefits and Risks.
+5. **Lawyer Brief Export:** Produces a structured, professional summary of your facts and goals, ready to be handed to a human lawyer.
 
 ---
 
@@ -13,7 +28,7 @@ Users
 ├── 📱 Mobile App (Expo / React Native)   ──┐
 └── 🌐 Web App (Pure HTML/CSS/JS)         ──┤──→ FastAPI Backend ──→ Google Gemini API
                                              │       (Render Free Tier)    (User's Own Key)
-                                             └── BM25 Retrieval (in-memory, free)
+                                             └── BM25/Qdrant Hybrid Retrieval
 ```
 
 ### Why Zero Cost?
@@ -23,7 +38,7 @@ Users
 | Mobile App       | **Free**      | Expo (no build server needed)    |
 | Web App          | **Free**      | GitHub Pages / Netlify / Vercel  |
 | AI (Gemini)      | **User pays** | BYOK — user's own API key        |
-| Vector DB (BM25) | **Free**      | In-memory, no external service   |
+| Vector DB        | **Free**      | In-memory BM25 / Local Qdrant    |
 
 ---
 
@@ -45,110 +60,39 @@ venv\Scripts\activate        # Windows
 # Install dependencies
 pip install -r requirements.txt
 
-# Optional: copy and edit .env
-copy .env.example .env       # Windows
-# cp .env.example .env       # Mac/Linux
-# → Edit .env if you want a server-side fallback key (not required for BYOK)
-
 # Start the server
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 API is now live at: **http://localhost:8000**
-- Swagger docs: http://localhost:8000/docs
 - Health check: http://localhost:8000/health
 
-### 3. Web App (No Build Needed!)
-```bash
-# Just open the file in your browser:
-start webapp/index.html      # Windows
-# open webapp/index.html     # Mac
-
-# Or serve it with any static server:
-# npx serve webapp/
-```
-
-### 4. Mobile App (Expo)
+### 3. Mobile App (Expo)
 ```bash
 cd nyaya-mitra-app
 npm install
 
-# For Android emulator:
-npx expo start --android
-
-# For iOS simulator (Mac only):
-npx expo start --ios
-
-# For browser preview:
+# For browser preview (Fastest for testing UI):
 npx expo start --web
+
+# For Android emulator / iOS simulator:
+npx expo start
 ```
 
 ---
 
 ## 🔑 Bring Your Own Key (BYOK)
 
-Users provide their own **Google Gemini API key** — free to get, no credit card required.
+Nyaya Mitra is entirely free because users provide their own **Google Gemini API key**.
 
 1. Visit [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
-2. Create a free API key
-3. Enter it in the app's key modal — it's sent only to your backend, never stored on any server
+2. Create a free API key (No credit card required).
+3. Enter it directly in the app.
 
 **Security guarantees:**
-- Key is sent per-request via `Authorization: Bearer` header
-- Never logged, cached, or stored on the server
-- Backend discards it immediately after each Gemini API call
-- BYOK can be stored locally (mobile: `expo-secure-store`; web: `localStorage`, opt-in)
-
----
-
-## 📱 Physical Device Setup (Mobile)
-
-Physical devices can't reach `localhost`. You need to set your machine's LAN IP:
-
-```bash
-# 1. Find your LAN IP
-ipconfig                 # Windows → look for "IPv4 Address"
-ifconfig en0             # Mac → look for "inet"
-
-# 2. Create nyaya-mitra-app/.env
-echo EXPO_PUBLIC_API_BASE_URL=http://192.168.1.42:8000 > nyaya-mitra-app/.env
-
-# 3. Start backend on all interfaces
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
-# 4. Start Expo (restart after .env change)
-cd nyaya-mitra-app && npx expo start
-```
-
----
-
-## 🧪 Running Tests
-```bash
-# All 12 tests (backend)
-pytest tests/ -v
-
-# Quick smoke test
-python test_api.py
-```
-
----
-
-## 🚢 Deploy to Production (Free)
-
-### Backend — Render.com
-1. Push this repo to GitHub
-2. Create a new **Web Service** on [render.com](https://render.com)
-3. Connect your GitHub repo
-4. Render detects `render.yaml` automatically — just click Deploy
-5. Set `ALLOWED_ORIGINS` to your web app URL in Render's Environment settings
-
-### Web App — GitHub Pages
-```bash
-# Enable GitHub Pages in repo settings → Source: "Deploy from branch: main, /webapp"
-# Your web app will be live at: https://yourusername.github.io/nyaya-mitra-mvp/webapp/
-```
-
-After deploying backend, update `DEFAULT_API_BASE` in `webapp/app.js` to your Render URL.
+- The key is sent via the `Authorization: Bearer` header.
+- It is never logged, cached, or stored on the backend.
+- The server discards it immediately after generating the strategic response.
 
 ---
 
@@ -156,37 +100,24 @@ After deploying backend, update `DEFAULT_API_BASE` in `webapp/app.js` to your Re
 
 ```
 nyaya-mitra-mvp/
-├── app/                          # FastAPI backend (modular)
+├── app/                          # FastAPI Backend
 │   ├── api/routes/               # health, query, admin endpoints
-│   ├── core/config.py            # All config from env vars
-│   ├── models/schemas.py         # Pydantic request/response models
-│   ├── retrieval/                # BM25 + Qdrant hybrid retriever
-│   └── services/llm_service.py  # Gemini API integration
-├── webapp/                       # Web app (pure HTML/CSS/JS — no framework)
-│   ├── index.html
-│   ├── style.css
-│   └── app.js
-├── nyaya-mitra-app/              # Mobile app (Expo / React Native)
+│   ├── models/schemas.py         # Advanced structured JSON definitions
+│   ├── retrieval/                # BM25 + Qdrant Reciprocal Rank Fusion (RRF)
+│   └── services/llm_service.py   # Strict schema extraction prompt
+├── nyaya-mitra-app/              # Mobile App (React Native)
 │   └── src/
-│       ├── components/           # ChatBubble, ApiKeyModal, ErrorBoundary
-│       ├── hooks/                # useChat, useServerHealth
-│       ├── screens/              # ChatScreen
-│       ├── services/             # api.js, keyStorage.js
-│       └── theme/                # colors.js
-├── tests/                        # 12 backend pytest tests
-├── etl_pipeline.py               # PDF → JSON chunk store (run once)
-├── vector_store_mock.json        # Pre-built BM25 retrieval store
-├── requirements.txt
-├── Dockerfile
-├── render.yaml                   # One-click Render deployment
-└── README.md
+│       ├── components/           # Intelligence Dashboard UI (AiCard)
+│       └── hooks/                # Server Health & Chat State
+├── tests/                        # Pytest suite
+└── etl_pipeline.py               # Data ingestion script
 ```
 
 ---
 
 ## ⚠️ Legal Disclaimer
 
-Nyaya Mitra provides **legal information, not legal advice**. Always consult a qualified lawyer for your specific situation. The information provided is based on publicly available legal texts and may not reflect the most recent amendments.
+Nyaya Mitra provides **legal intelligence and structured case analysis, not legal advice**. It is designed to prepare users for a productive consultation with a qualified human lawyer. Always consult a legal professional for your specific situation.
 
 ---
 
@@ -196,4 +127,4 @@ MIT License — free to use, modify, and deploy.
 
 ---
 
-*Built with ❤️ for making Indian law accessible to everyone.*
+*Built to make Indian legal strategy accessible to everyone.*
