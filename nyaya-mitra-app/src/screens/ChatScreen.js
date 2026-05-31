@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useChat } from '../hooks/useChat';
+import { useServerHealth } from '../hooks/useServerHealth';
 import { UserBubble, AiCard } from '../components/ChatBubble';
 import { ApiKeyModal } from '../components/ApiKeyModal';
 import { loadKeySecurely } from '../services/keyStorage';
@@ -47,6 +48,9 @@ export default function ChatScreen() {
     clearChat,
   } = useChat(apiKey);
 
+  // Server connectivity — polls every 30s, shows banner proactively
+  const { isConnected, serverInfo, checkNow } = useServerHealth(apiKey);
+
   const handleSend = () => {
     if (!inputText.trim() || isLoading) return;
     sendMessage(inputText.trim());
@@ -66,6 +70,16 @@ export default function ChatScreen() {
     return <AiCard content={item.content} />;
   };
 
+  // Server status pill color logic
+  const statusColor =
+    isConnected === null ? '#94A3B8' :   // checking — grey
+    isConnected ? '#22C55E' :             // connected — green
+    '#EF4444';                            // disconnected — red
+  const statusLabel =
+    isConnected === null ? '⏳' :
+    isConnected ? '🟢' :
+    '🔴';
+
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="light" backgroundColor={COLORS.brandDark} />
@@ -80,6 +94,14 @@ export default function ChatScreen() {
           </View>
         </View>
         <View style={styles.headerActions}>
+          {/* Server status dot — tap to re-check */}
+          <Pressable
+            style={styles.statusDot}
+            onPress={checkNow}
+            accessibilityLabel={`Server ${isConnected ? 'connected' : 'disconnected'}. Tap to re-check.`}
+          >
+            <Text style={{ fontSize: 14 }}>{statusLabel}</Text>
+          </Pressable>
           {/* API Key button */}
           <Pressable
             style={[styles.iconBtn, apiKey ? styles.iconBtnActive : null]}
@@ -94,6 +116,15 @@ export default function ChatScreen() {
           </Pressable>
         </View>
       </View>
+
+      {/* ── Server offline banner ─────────────────────────────────────────── */}
+      {isConnected === false && (
+        <Pressable style={styles.offlineBanner} onPress={checkNow}>
+          <Text style={styles.offlineText}>
+            📡 Cannot reach server. Tap to retry. · Check EXPO_PUBLIC_API_BASE_URL
+          </Text>
+        </Pressable>
+      )}
 
       {/* ── No key warning ───────────────────────────────────────────────── */}
       {!apiKey && (
@@ -148,7 +179,11 @@ export default function ChatScreen() {
             disabled={!inputText.trim() || isLoading}
             accessibilityLabel="Send message"
           >
-            <Text style={styles.sendIcon}>➤</Text>
+            {isLoading ? (
+              <ActivityIndicator size="small" color={COLORS.textOnDark} />
+            ) : (
+              <Text style={styles.sendIcon}>➤</Text>
+            )}
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -183,7 +218,15 @@ const styles = StyleSheet.create({
   logo: { fontSize: 26 },
   title: { fontSize: 18, fontWeight: '700', color: COLORS.textOnDark },
   subtitle: { fontSize: 11, color: COLORS.textOnBrand, marginTop: 1 },
-  headerActions: { flexDirection: 'row', gap: 8 },
+  headerActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  statusDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.brandMid,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   iconBtn: {
     width: 36,
     height: 36,
@@ -194,6 +237,14 @@ const styles = StyleSheet.create({
   },
   iconBtnActive: { backgroundColor: '#1B5E20' },
   iconBtnText: { fontSize: 16 },
+
+  // Offline banner
+  offlineBanner: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  offlineText: { fontSize: 12, color: '#991B1B', textAlign: 'center' },
 
   // No key banner
   noKeyBanner: {

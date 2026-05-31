@@ -9,9 +9,8 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  Clipboard,
-  Alert,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { COLORS } from '../theme/colors';
 
 // ─── User message bubble ─────────────────────────────────────────────────────
@@ -51,7 +50,7 @@ export function AiCard({ content, onRetry }) {
   const validCitations = citations.filter((c) => typeof c === 'string' && c.trim().length > 0);
   const validSteps = suggested_next_steps.filter((s) => typeof s === 'string' && s.trim().length > 0);
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     const fullText = [
       explanation,
       validCitations.length ? '\nSources:\n' + validCitations.join('\n') : '',
@@ -59,7 +58,7 @@ export function AiCard({ content, onRetry }) {
     ]
       .filter(Boolean)
       .join('\n');
-    Clipboard.setString(fullText);
+    await Clipboard.setStringAsync(fullText);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

@@ -35,7 +35,18 @@ export function ApiKeyModal({ visible, currentKey, onSave, onClose }) {
   const [showKey, setShowKey] = useState(false);
   const [testStatus, setTestStatus] = useState(null); // null | 'testing' | 'ok' | 'error'
   const [testMessage, setTestMessage] = useState('');
-  const [persistKey, setPersistKey] = useState(false);
+  // Initialize toggle to true if a key is already saved (currentKey is non-empty)
+  const [persistKey, setPersistKey] = useState(!!currentKey);
+
+  // Sync draftKey and persistKey when the modal opens with an existing key
+  React.useEffect(() => {
+    if (visible) {
+      setDraftKey(currentKey || '');
+      setPersistKey(!!currentKey);
+      setTestStatus(null);
+      setTestMessage('');
+    }
+  }, [visible, currentKey]);
 
   const handleTest = async () => {
     if (!draftKey.trim()) {

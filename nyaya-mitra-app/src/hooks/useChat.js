@@ -36,6 +36,8 @@ export function useChat(apiKey) {
   const [lastQuery, setLastQuery] = useState('');
   const flatListRef = useRef(null);
   const historyLoaded = useRef(false);
+  // Keep a ref to lastQuery so retryLast never goes stale
+  const lastQueryRef = useRef('');
 
   // ── Load persisted history on mount ──────────────────────────────────────
   useEffect(() => {
@@ -71,6 +73,7 @@ export function useChat(apiKey) {
       if (!trimmed || isLoading) return;
 
       setLastQuery(trimmed);
+      lastQueryRef.current = trimmed;
 
       const userMsg = {
         id: `u-${Date.now()}`,
@@ -117,16 +120,17 @@ export function useChat(apiKey) {
     [isLoading, apiKey, persistMessages]
   );
 
-  // ── Retry last query ──────────────────────────────────────────────────────
+  // ── Retry last query — uses ref to avoid stale closure ───────────────────
   const retryLast = useCallback(() => {
-    if (lastQuery) sendMessage(lastQuery);
-  }, [lastQuery, sendMessage]);
+    if (lastQueryRef.current) sendMessage(lastQueryRef.current);
+  }, [sendMessage]);
 
   // ── Clear chat ────────────────────────────────────────────────────────────
   const clearChat = useCallback(() => {
     const fresh = [WELCOME_MESSAGE];
     setMessages(fresh);
     setLastQuery('');
+    lastQueryRef.current = '';
     AsyncStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(fresh)).catch(() => {});
   }, []);
 

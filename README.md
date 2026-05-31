@@ -1,227 +1,199 @@
-# Nyaya Mitra — Legal AI for Indian Law
+# Nyaya Mitra ⚖️ — AI Legal Guide for Indian Law
 
-A free-to-build, free-to-run AI legal assistant for Indian law covering:
-- **BNS** — Bharatiya Nyaya Sanhita
-- **BNSS** — Bharatiya Nagarik Suraksha Sanhita
-- **BSA** — Bharatiya Sakshya Adhiniyam
-- **Constitution of India**
+> **100% Free · Open Source · Zero Running Cost · Bring Your Own Key**
 
-> ⚠️ **Disclaimer**: Nyaya Mitra provides legal information, not legal advice. Always consult a qualified lawyer for your specific situation.
+Nyaya Mitra is an AI-powered legal assistant for Indian law, covering the **Bharatiya Nyaya Sanhita (BNS)**, **Bharatiya Nagarik Suraksha Sanhita (BNSS)**, **Bharatiya Sakshya Adhiniyam (BSA)**, and the **Constitution of India**.
 
 ---
 
-## Architecture
+## 🏗️ Architecture — Zero Cost by Design
 
 ```
-Backend:   Python · FastAPI · BM25 (rank_bm25) · google-genai SDK
-Frontend:  React Native · Expo SDK 55 · expo-secure-store
-Retrieval: Hybrid BM25 (always) + Qdrant semantic (optional, free, local)
-Deploy:    Render (free tier) · Docker · Local
+Users
+├── 📱 Mobile App (Expo / React Native)   ──┐
+└── 🌐 Web App (Pure HTML/CSS/JS)         ──┤──→ FastAPI Backend ──→ Google Gemini API
+                                             │       (Render Free Tier)    (User's Own Key)
+                                             └── BM25 Retrieval (in-memory, free)
 ```
+
+### Why Zero Cost?
+| Component        | Cost          | How                              |
+|-----------------|---------------|----------------------------------|
+| Backend API      | **Free**      | Render.com free tier             |
+| Mobile App       | **Free**      | Expo (no build server needed)    |
+| Web App          | **Free**      | GitHub Pages / Netlify / Vercel  |
+| AI (Gemini)      | **User pays** | BYOK — user's own API key        |
+| Vector DB (BM25) | **Free**      | In-memory, no external service   |
 
 ---
 
-## Quick Start — Backend
+## 🚀 Quick Start
 
-### 1. Clone and set up environment
+### 1. Clone the repo
 ```bash
-git clone <repo-url>
-cd "Project Nyaya Mitra"
+git clone https://github.com/Shivanshmishra7275/nyaya-mitra-mvp.git
+cd nyaya-mitra-mvp
+```
+
+### 2. Backend Setup
+```bash
+# Create virtual environment
 python -m venv venv
-# Windows:
-venv\Scripts\activate
-# Mac/Linux:
-source venv/bin/activate
+venv\Scripts\activate        # Windows
+# source venv/bin/activate   # Mac/Linux
+
+# Install dependencies
 pip install -r requirements.txt
+
+# Optional: copy and edit .env
+copy .env.example .env       # Windows
+# cp .env.example .env       # Mac/Linux
+# → Edit .env if you want a server-side fallback key (not required for BYOK)
+
+# Start the server
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### 2. Configure environment
+API is now live at: **http://localhost:8000**
+- Swagger docs: http://localhost:8000/docs
+- Health check: http://localhost:8000/health
+
+### 3. Web App (No Build Needed!)
 ```bash
-cp .env.example .env
-# Edit .env and optionally add your GEMINI_API_KEY
-# Or leave it blank and use BYOK from the app
+# Just open the file in your browser:
+start webapp/index.html      # Windows
+# open webapp/index.html     # Mac
+
+# Or serve it with any static server:
+# npx serve webapp/
 ```
 
-### 3. Run the ETL pipeline (builds the BM25 search index)
-```bash
-# BM25-only (fast, no extra deps):
-python etl_pipeline.py
-# Output: vector_store_mock.json (~2.5 MB, 2000+ chunks)
-# Add more PDFs to Raw_Data/ and re-run anytime
-```
-
-### 3b. Optional: Enable semantic retrieval with Qdrant
-```bash
-# Start Qdrant (free, requires Docker):
-docker run -p 6333:6333 qdrant/qdrant
-
-# Ingest with real embeddings (downloads ~22 MB model on first run):
-python etl_pipeline.py --qdrant
-
-# Then set in .env:
-# QDRANT_ENABLED=true
-# Restart server — retrieval_mode will show "Hybrid (BM25 + Semantic)"
-```
-
-### 4. Start the backend
-```bash
-# Development (with auto-reload):
-uvicorn app.main:app --reload
-
-# Production (all interfaces for physical devices and hosting):
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
-```
-
-### 5. Verify it's running
-```bash
-curl http://localhost:8000/health
-# Expected: {"status":"ok","version":"1.0.0","retrieval_mode":"BM25-only","chunks_loaded":2005}
-# With Qdrant: retrieval_mode will be "Hybrid (BM25 + Semantic)"
-```
-
----
-
-## Quick Start — Frontend
-
-### 1. Install dependencies
+### 4. Mobile App (Expo)
 ```bash
 cd nyaya-mitra-app
 npm install
-# expo-secure-store and @react-native-async-storage/async-storage are already in package.json
-```
 
-### 2. Configure API URL for your device
-```bash
-# Copy the frontend env example:
-cp nyaya-mitra-app/.env.example nyaya-mitra-app/.env
+# For Android emulator:
+npx expo start --android
 
-# Edit nyaya-mitra-app/.env:
-# Android emulator:
-EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:8000
+# For iOS simulator (Mac only):
+npx expo start --ios
 
-# Physical device (REQUIRED — find your LAN IP with `ipconfig` on Windows):
-EXPO_PUBLIC_API_BASE_URL=http://192.168.1.42:8000
-
-# Production:
-EXPO_PUBLIC_API_BASE_URL=https://nyaya-mitra-api.onrender.com
-```
-
-> **Physical device note**: The backend must also be started with `--host 0.0.0.0`
-> (not just `127.0.0.1`) for physical devices to reach it over LAN.
-
-### 3. Run the app
-```bash
-npx expo start
-# Press 'a' for Android emulator, 'i' for iOS simulator
-# Scan QR code with Expo Go app for physical device
+# For browser preview:
+npx expo start --web
 ```
 
 ---
 
-## Testing BYOK Flow
+## 🔑 Bring Your Own Key (BYOK)
 
-1. Start the backend **without** `GEMINI_API_KEY` in `.env`
-2. Run the app and tap the 🔑 icon
-3. Enter your Gemini API key (get free key at https://aistudio.google.com/app/apikey)
-4. Tap "Test Connection" — should show ✓ Connected
-5. Ask a legal question — it should work
+Users provide their own **Google Gemini API key** — free to get, no credit card required.
 
-**Security verification:**
+1. Visit [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
+2. Create a free API key
+3. Enter it in the app's key modal — it's sent only to your backend, never stored on any server
+
+**Security guarantees:**
+- Key is sent per-request via `Authorization: Bearer` header
+- Never logged, cached, or stored on the server
+- Backend discards it immediately after each Gemini API call
+- BYOK can be stored locally (mobile: `expo-secure-store`; web: `localStorage`, opt-in)
+
+---
+
+## 📱 Physical Device Setup (Mobile)
+
+Physical devices can't reach `localhost`. You need to set your machine's LAN IP:
+
 ```bash
-# Check that the raw key never appears in backend logs
-uvicorn app.main:app --reload 2>&1 | grep -v "AIza"
-# Should show masked key like: Key=AIza...abcd
+# 1. Find your LAN IP
+ipconfig                 # Windows → look for "IPv4 Address"
+ifconfig en0             # Mac → look for "inet"
+
+# 2. Create nyaya-mitra-app/.env
+echo EXPO_PUBLIC_API_BASE_URL=http://192.168.1.42:8000 > nyaya-mitra-app/.env
+
+# 3. Start backend on all interfaces
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+# 4. Start Expo (restart after .env change)
+cd nyaya-mitra-app && npx expo start
 ```
 
 ---
 
-## Running Tests
+## 🧪 Running Tests
 ```bash
+# All 12 tests (backend)
 pytest tests/ -v
+
+# Quick smoke test
+python test_api.py
 ```
 
 ---
 
-## Deploy to Render (Free Tier)
-1. Commit your code and push the repository to GitHub.
-2. Sign in to [Render](https://render.com/) and click **New > Web Service**.
-3. Connect your GitHub repository.
-4. Render will automatically detect the `render.yaml` Blueprint file and ask you to apply it.
-5. In the Render Dashboard, go to your new Web Service > **Environment**.
-6. Set the required environment variables:
-   - `APP_ENV`: `production`
-   - `ALLOWED_ORIGINS`: (Set this to your frontend URL later once deployed)
-   - `QDRANT_ENABLED`: `false` (Render free tier does not support Docker compose. Stick to BM25 or use a managed Qdrant cloud URL).
-7. Click **Deploy**.
+## 🚢 Deploy to Production (Free)
 
-> **Note**: Free instances spin down after 15 minutes of inactivity, which causes a 50-second delay on the next request. This is normal for a beta MVP.
+### Backend — Render.com
+1. Push this repo to GitHub
+2. Create a new **Web Service** on [render.com](https://render.com)
+3. Connect your GitHub repo
+4. Render detects `render.yaml` automatically — just click Deploy
+5. Set `ALLOWED_ORIGINS` to your web app URL in Render's Environment settings
 
----
-
-## Project Structure
-
-```
-Project Nyaya Mitra/
-├── app/                          # FastAPI application
-│   ├── main.py                   # App factory + lifespan
-│   ├── core/config.py            # Env-driven settings
-│   ├── models/schemas.py         # Pydantic request/response models
-│   ├── api/routes/
-│   │   ├── health.py             # /health, /version
-│   │   └── query.py              # /api/v1/legal-query (BYOK)
-│   ├── retrieval/
-│   │   ├── bm25_retriever.py     # BM25 lexical retrieval
-│   │   ├── qdrant_retriever.py   # Semantic retrieval (Qdrant + sentence-transformers)
-│   │   └── hybrid_retriever.py   # Hybrid orchestrator (BM25 + Qdrant, fallback)
-│   └── services/
-│       └── llm_service.py        # Gemini SDK, key masking
-├── nyaya-mitra-app/              # React Native frontend
-│   ├── src/
-│   │   ├── config/api.js         # Env-driven base URL (physical device ready)
-│   │   ├── services/
-│   │   │   ├── api.js            # Fetch service layer
-│   │   │   └── keyStorage.js     # expo-secure-store wrapper for API key
-│   │   ├── hooks/useChat.js      # Chat state + AsyncStorage persistence
-│   │   ├── components/
-│   │   │   ├── ChatBubble.js     # User + AI message cards
-│   │   │   └── ApiKeyModal.js    # BYOK key entry modal
-│   │   ├── screens/ChatScreen.js # Main chat UI
-│   │   └── theme/colors.js       # Color palette
-│   └── App.js                    # Thin entry point
-├── tests/test_api.py             # Backend test suite (12 tests)
-├── etl_pipeline.py               # PDF → JSON + optional Qdrant ingestion
-├── Raw_Data/                     # Legal PDFs (not in git)
-├── vector_store_mock.json        # BM25 store (generated)
-├── requirements.txt
-├── .env.example
-├── Dockerfile
-└── render.yaml
-```
-
----
-
-## Security Notes
-- Raw API keys are **never logged** — only `AIza...abcd` masked format
-- BYOK key stored using **expo-secure-store** (Keychain/EncryptedSharedPreferences), not plain AsyncStorage
-- CORS is **env-driven** — use `ALLOWED_ORIGINS=*` for dev, real URLs for prod
-- `allow_credentials` is disabled when `ALLOWED_ORIGINS=*` (browser spec compliance)
-- Keys are **request-scoped** — never stored on server, never returned in response
-- Input is **validated and length-limited** — max 1000 chars per query
-- Docs UI is **disabled in production** (`APP_ENV=production`)
-
----
-
-## Migration Notes (v1 → v2)
-
-### API Key Storage (BYOK)
-If you were using a previous version that stored the API key in AsyncStorage under `@nyaya_mitra_saved_api_key`, the key will not auto-migrate. The user will need to re-enter their API key once — it will then be saved securely.
-
-### Semantic Retrieval (Qdrant)
-This is additive. Existing BM25-only deployments continue to work unchanged.
-To upgrade to hybrid retrieval:
+### Web App — GitHub Pages
 ```bash
-docker run -p 6333:6333 qdrant/qdrant
-python etl_pipeline.py --qdrant
-# Set QDRANT_ENABLED=true in .env
-# Restart server
+# Enable GitHub Pages in repo settings → Source: "Deploy from branch: main, /webapp"
+# Your web app will be live at: https://yourusername.github.io/nyaya-mitra-mvp/webapp/
 ```
+
+After deploying backend, update `DEFAULT_API_BASE` in `webapp/app.js` to your Render URL.
+
+---
+
+## 📁 Project Structure
+
+```
+nyaya-mitra-mvp/
+├── app/                          # FastAPI backend (modular)
+│   ├── api/routes/               # health, query, admin endpoints
+│   ├── core/config.py            # All config from env vars
+│   ├── models/schemas.py         # Pydantic request/response models
+│   ├── retrieval/                # BM25 + Qdrant hybrid retriever
+│   └── services/llm_service.py  # Gemini API integration
+├── webapp/                       # Web app (pure HTML/CSS/JS — no framework)
+│   ├── index.html
+│   ├── style.css
+│   └── app.js
+├── nyaya-mitra-app/              # Mobile app (Expo / React Native)
+│   └── src/
+│       ├── components/           # ChatBubble, ApiKeyModal, ErrorBoundary
+│       ├── hooks/                # useChat, useServerHealth
+│       ├── screens/              # ChatScreen
+│       ├── services/             # api.js, keyStorage.js
+│       └── theme/                # colors.js
+├── tests/                        # 12 backend pytest tests
+├── etl_pipeline.py               # PDF → JSON chunk store (run once)
+├── vector_store_mock.json        # Pre-built BM25 retrieval store
+├── requirements.txt
+├── Dockerfile
+├── render.yaml                   # One-click Render deployment
+└── README.md
+```
+
+---
+
+## ⚠️ Legal Disclaimer
+
+Nyaya Mitra provides **legal information, not legal advice**. Always consult a qualified lawyer for your specific situation. The information provided is based on publicly available legal texts and may not reflect the most recent amendments.
+
+---
+
+## 📄 License
+
+MIT License — free to use, modify, and deploy.
+
+---
+
+*Built with ❤️ for making Indian law accessible to everyone.*

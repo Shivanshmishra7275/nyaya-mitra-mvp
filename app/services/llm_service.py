@@ -11,6 +11,7 @@ SECURITY NOTES:
 import json
 import logging
 import re
+import time
 
 from google import genai
 
@@ -64,31 +65,57 @@ INSTRUCTIONS:
 """
 
 
-def _clean_json_response(raw_text: str) -> str:
-    """Strip markdown code fences if the LLM adds them despite instructions."""
+def _extract_json_from_response(raw_text: str) -> str:
+    """
+    Robustly extract JSON from an LLM response.
+    Handles:
+      - Clean JSON (ideal case)
+      - ```json ... ``` fenced code blocks
+      - ``` ... ``` fenced blocks
+      - JSON embedded within surrounding text (thinking model verbosity)
+    """
     raw_text = raw_text.strip()
-    # Remove ```json ... ``` or ``` ... ```
-    raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text, flags=re.IGNORECASE)
-    raw_text = re.sub(r"\s*```$", "", raw_text)
-    return raw_text.strip()
+
+    # 1. Try stripping markdown fences (most common case with Gemini Flash)
+    cleaned = re.sub(r"^```(?:json)?\s*", "", raw_text, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+
+    # 2. If it now starts with { it's probably clean JSON — try it directly
+    if cleaned.startswith("{"):
+        return cleaned
+
+    # 3. Fallback: find the first { ... } block in the text
+    # This handles thinking-mode responses that prepend verbose text
+    match = re.search(r"\{.*\}", raw_text, re.DOTALL)
+    if match:
+        return match.group(0)
+
+    # 4. Return as-is and let the caller handle the JSONDecodeError
+    return raw_text
 
 
-def generate_legal_response(query: str, chunks: list[dict], api_key: str) -> dict:
+def generate_legal_response(
+    query: str,
+    chunks: list[dict],
+    api_key: str,
+    max_retries: int = 2,
+) -> dict:
     """
     Call Gemini with the constructed prompt and return parsed JSON.
 
     Args:
-        query:   The user's legal question (already validated).
-        chunks:  Retrieved context chunks from the retriever.
-        api_key: The Gemini API key for this request (BYOK or server default).
-                 NEVER logged in full.
+        query:       The user's legal question (already validated).
+        chunks:      Retrieved context chunks from the retriever.
+        api_key:     The Gemini API key for this request (BYOK or server default).
+                     NEVER logged in full.
+        max_retries: Number of times to retry on transient failures.
 
     Returns:
         dict with keys: explanation, citations, suggested_next_steps
 
     Raises:
-        ValueError: if the LLM returns invalid JSON.
-        Exception: propagated from Gemini SDK on API errors.
+        ValueError: if the LLM returns invalid JSON after all retries.
+        Exception:  propagated from Gemini SDK on non-transient API errors.
     """
     # Audit log — masked key only, never full key
     logger.info(
@@ -98,23 +125,58 @@ def generate_legal_response(query: str, chunks: list[dict], api_key: str) -> dic
         len(chunks),
     )
 
-    client = genai.Client(api_key=api_key, http_options={'timeout': 60000})
+    client = genai.Client(api_key=api_key, http_options={"timeout": 60})
     prompt = build_prompt(query, chunks)
 
-    response = client.models.generate_content(
-        model=settings.GEMINI_MODEL,
-        contents=prompt,
-        config={"temperature": settings.LLM_TEMPERATURE},
-    )
+    last_exc = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = client.models.generate_content(
+                model=settings.GEMINI_MODEL,
+                contents=prompt,
+                config={"temperature": settings.LLM_TEMPERATURE},
+            )
 
-    raw_text = response.text
-    if not raw_text:
-        raise ValueError("LLM returned an empty response.")
+            raw_text = response.text
+            if not raw_text:
+                raise ValueError("LLM returned an empty response.")
 
-    clean = _clean_json_response(raw_text)
+            clean = _extract_json_from_response(raw_text)
 
-    try:
-        return json.loads(clean)
-    except json.JSONDecodeError as exc:
-        logger.error("LLM output was not valid JSON. Raw (first 200 chars): %.200s", clean)
-        raise ValueError(f"LLM returned malformed JSON: {exc}") from exc
+            try:
+                result = json.loads(clean)
+            except json.JSONDecodeError as exc:
+                logger.error(
+                    "LLM output was not valid JSON (attempt %d/%d). Raw (first 300 chars): %.300s",
+                    attempt, max_retries, clean,
+                )
+                raise ValueError(f"LLM returned malformed JSON: {exc}") from exc
+
+            # Validate required keys are present
+            required = {"explanation", "citations", "suggested_next_steps"}
+            missing = required - result.keys()
+            if missing:
+                logger.warning(
+                    "LLM JSON missing expected keys: %s. Filling with defaults.", missing
+                )
+                result.setdefault("explanation", "")
+                result.setdefault("citations", [])
+                result.setdefault("suggested_next_steps", [])
+
+            logger.info("LLM call successful on attempt %d.", attempt)
+            return result
+
+        except ValueError:
+            # JSON parsing error — retry once with backoff
+            last_exc = ValueError
+            if attempt < max_retries:
+                logger.warning("Retrying LLM call in 2s (attempt %d/%d)...", attempt, max_retries)
+                time.sleep(2)
+            continue
+
+        except Exception as exc:
+            # API errors (quota, auth, network) — don't retry, re-raise immediately
+            logger.error("Gemini API error: %s", exc, exc_info=True)
+            raise
+
+    raise ValueError(f"LLM failed to return valid JSON after {max_retries} attempts.") from last_exc
