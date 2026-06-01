@@ -45,18 +45,50 @@ export function AiCard({ content, onRetry }) {
     );
   }
 
-  const { 
+  const {
+    answer = '',
+    legal_gps = '',
+    issue_graph = [],
+    opposition_view = [],
+    strategy_tree = [],
+    confidence,
+    next_actions = [],
+    scope_status = 'in_scope',
+
     legal_mapping = [],
-    explanation = '', 
+    explanation = '',
     weaknesses = [],
     strategy_paths = [],
     lawyer_brief = '',
-    citations = [], 
-    retrieval_note 
+    citations = [],
+    retrieval_note,
   } = content;
 
-  const validCitations = citations.filter((c) => typeof c === 'string' && c.trim().length > 0);
-  const validMappings = legal_mapping.filter((m) => typeof m === 'string' && m.trim().length > 0);
+  const cleanList = (items) =>
+    (Array.isArray(items) ? items : []).filter(
+      (v) => typeof v === 'string' && v.trim().length > 0
+    );
+
+  const validCitations = cleanList(citations);
+  const validMappings = cleanList(legal_mapping);
+  const validIssues = cleanList(issue_graph);
+  const validOpposition = cleanList(opposition_view);
+  const validNextActions = cleanList(next_actions);
+
+  const summaryText = answer || explanation;
+  const detailText = answer && explanation && answer !== explanation ? explanation : '';
+  const strategyNodes = Array.isArray(strategy_tree) && strategy_tree.length > 0
+    ? strategy_tree
+    : strategy_paths;
+
+  const scopeMeta = {
+    in_scope: { label: 'In scope', style: styles.scopeIn },
+    partial_scope: { label: 'Partial scope', style: styles.scopePartial },
+    out_of_scope: { label: 'Out of scope', style: styles.scopeOut },
+  };
+  const scopeKey = scopeMeta[scope_status] ? scope_status : 'in_scope';
+  const scopeLabel = scopeMeta[scopeKey].label;
+  const scopeStyle = scopeMeta[scopeKey].style;
 
   const handleCopyBrief = async () => {
     await Clipboard.setStringAsync(lawyer_brief);
@@ -69,6 +101,9 @@ export function AiCard({ content, onRetry }) {
       {/* Header row */}
       <View style={styles.cardHeader}>
         <Text style={styles.badge}>⚖️ NYAYA MITRA INTELLIGENCE</Text>
+        <View style={[styles.scopePill, scopeStyle]}>
+          <Text style={styles.scopeText}>{scopeLabel}</Text>
+        </View>
       </View>
 
       {/* Legal disclaimer */}
@@ -86,8 +121,23 @@ export function AiCard({ content, onRetry }) {
         </View>
       )}
 
-      {/* Main explanation */}
-      <Text style={styles.explanation}>{explanation}</Text>
+      {/* Legal GPS */}
+      {legal_gps ? (
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Legal GPS</Text>
+          <Text style={styles.infoText}>{legal_gps}</Text>
+        </View>
+      ) : null}
+
+      {/* Summary / Answer */}
+      {summaryText ? (
+        <Text style={styles.explanation}>{summaryText}</Text>
+      ) : null}
+
+      {/* Detail explanation (optional) */}
+      {detailText ? (
+        <Text style={styles.detailText}>{detailText}</Text>
+      ) : null}
 
       {/* Weaknesses Alert */}
       {weaknesses.length > 0 && (
@@ -100,16 +150,54 @@ export function AiCard({ content, onRetry }) {
       )}
 
       {/* Strategy Paths */}
-      {strategy_paths.length > 0 && (
+      {Array.isArray(strategyNodes) && strategyNodes.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>🧭 STRATEGY OPTIONS</Text>
-          {strategy_paths.map((path, i) => (
+          {strategyNodes.map((path, i) => (
             <View key={i} style={styles.strategyCard}>
               <Text style={styles.strategyName}>{path.path_name}</Text>
               <Text style={styles.strategyDetail}><Text style={styles.bold}>When:</Text> {path.when_suitable}</Text>
               <Text style={styles.strategyDetail}><Text style={styles.bold}>Benefit:</Text> {path.benefit}</Text>
               <Text style={styles.strategyDetail}><Text style={styles.bold}>Risk:</Text> {path.risk}</Text>
             </View>
+          ))}
+        </View>
+      )}
+
+      {/* Issue graph */}
+      {validIssues.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>🧩 ISSUE GRAPH</Text>
+          {validIssues.map((item, i) => (
+            <Text key={i} style={styles.listItem}>• {item}</Text>
+          ))}
+        </View>
+      )}
+
+      {/* Opposition view */}
+      {validOpposition.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>🛡 OPPOSITION VIEW</Text>
+          {validOpposition.map((item, i) => (
+            <Text key={i} style={styles.listItem}>• {item}</Text>
+          ))}
+        </View>
+      )}
+
+      {/* Confidence */}
+      {confidence?.label && (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>📊 CONFIDENCE</Text>
+          <Text style={styles.infoText}>{confidence.label} — {confidence.reason || ''}</Text>
+        </View>
+      )}
+
+      {/* Next actions */}
+      {validNextActions.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>✅ NEXT ACTIONS</Text>
+          {validNextActions.map((item, i) => (
+            <Text key={i} style={styles.listItem}>• {item}</Text>
           ))}
         </View>
       )}
@@ -259,6 +347,20 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 8,
   },
+  infoRow: { marginBottom: 10 },
+  infoLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary, marginBottom: 4 },
+  infoText: { fontSize: 13, color: COLORS.textPrimary, lineHeight: 18 },
+  detailText: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 20, marginBottom: 10 },
+  listItem: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 19, marginBottom: 2 },
+  scopePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  scopeText: { fontSize: 10, fontWeight: '700', color: '#0B0B0B' },
+  scopeIn: { backgroundColor: '#C8E6C9' },
+  scopePartial: { backgroundColor: '#FFE0B2' },
+  scopeOut: { backgroundColor: '#FFCDD2' },
 
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   pill: {
