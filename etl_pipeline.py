@@ -28,11 +28,14 @@ Usage:
 import argparse
 import json
 import logging
+import re
 import sys
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 from langchain_community.document_loaders import PyPDFLoader
+from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 # ---------------------------------------------------------------------------
@@ -41,6 +44,26 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 DEFAULT_RAW_DATA_DIR = Path("Raw_Data")
 DEFAULT_OUTPUT_FILE = Path("vector_store_mock.json")
+
+ACT_SOURCES = {
+    "bns.pdf": {
+        "act_name": "Bharatiya Nyaya Sanhita, 2023",
+        "source_url": "https://www.mha.gov.in/sites/default/files/250883_english_01042024.pdf",
+    },
+    "bnss.pdf": {
+        "act_name": "Bharatiya Nagarik Suraksha Sanhita, 2023",
+        "source_url": "https://www.mha.gov.in/sites/default/files/2024-04/250884_2_english_01042024.pdf",
+    },
+    "bsa.pdf": {
+        "act_name": "Bharatiya Sakshya Adhiniyam, 2023",
+        "source_url": "https://www.mha.gov.in/en/commoncontent/new-criminal-laws",
+    },
+}
+
+SECTION_PATTERNS = [
+    re.compile(r"(?m)^(?:Section|SECTION)\s+(\d+[A-Za-z]?)\s*[-–—:.]?\s*([^\n]*)$"),
+    re.compile(r"(?m)^(\d{1,3}[A-Za-z]?)\.\s+([A-Z][^\n]{0,120})$"),
+]
 
 CHUNK_SIZE = 1000    # characters — enough for a full legal sub-section
 CHUNK_OVERLAP = 200  # ~20% overlap ensures boundary clauses are not truncated
@@ -61,27 +84,39 @@ logger = logging.getLogger(__name__)
 # Extract — Dynamic PDF scanning
 # ---------------------------------------------------------------------------
 
-def discover_pdfs(pdf_dir: Path) -> list[Path]:
+def discover_pdfs(pdf_dir: Path, include_all: bool = False) -> list[Path]:
     """
-    Dynamically discover all .pdf files in pdf_dir (non-recursive).
-    Replaces the old hardcoded PDF_FILES list.
+    Discover .pdf files in pdf_dir (non-recursive).
+    By default, only official BNS/BNSS/BSA PDFs are included.
     """
     pdfs = sorted(pdf_dir.glob("*.pdf"))
     if not pdfs:
         logger.warning("No PDF files found in '%s'", pdf_dir)
-    else:
+        return []
+
+    if include_all:
         logger.info("Discovered %d PDF(s): %s", len(pdfs), [p.name for p in pdfs])
-    return pdfs
+        return pdfs
+
+    allowed = {name.lower() for name in ACT_SOURCES.keys()}
+    filtered = [p for p in pdfs if p.name.lower() in allowed]
+    skipped = [p.name for p in pdfs if p.name.lower() not in allowed]
+
+    if skipped:
+        logger.warning("Skipping non-criminal-law PDFs: %s", skipped)
+
+    logger.info("Discovered %d official PDF(s): %s", len(filtered), [p.name for p in filtered])
+    return filtered
 
 
-def extract_documents(pdf_dir: Path) -> list[Any]:
+def extract_documents(pdf_dir: Path, include_all: bool = False) -> list[Any]:
     """
     Load all PDFs found in pdf_dir using LangChain's PyPDFLoader.
     Each page becomes a LangChain Document object.
     Source metadata is normalised to just the filename.
     """
     all_documents = []
-    pdfs = discover_pdfs(pdf_dir)
+    pdfs = discover_pdfs(pdf_dir, include_all=include_all)
 
     for pdf_path in pdfs:
         try:
@@ -89,9 +124,13 @@ def extract_documents(pdf_dir: Path) -> list[Any]:
             loader = PyPDFLoader(str(pdf_path))
             documents = loader.load()
 
+            act_meta = ACT_SOURCES.get(pdf_path.name.lower()) if not include_all else None
             for doc in documents:
                 # Normalise source to bare filename for consistent citation labels
                 doc.metadata["source"] = pdf_path.name
+                if act_meta:
+                    doc.metadata["act_name"] = act_meta["act_name"]
+                    doc.metadata["source_url"] = act_meta["source_url"]
 
             all_documents.extend(documents)
             logger.info("  -> %d page(s) from '%s'", len(documents), pdf_path.name)
@@ -106,11 +145,64 @@ def extract_documents(pdf_dir: Path) -> list[Any]:
 # Transform
 # ---------------------------------------------------------------------------
 
+def _merge_pages(pages: list[Document]) -> tuple[str, list[tuple[int, int]]]:
+    """Merge page texts into one string and track start offsets per page."""
+    parts = []
+    offsets: list[tuple[int, int]] = []
+    cursor = 0
+    for doc in pages:
+        page_num = doc.metadata.get("page", 0)
+        offsets.append((cursor, int(page_num)))
+        text = doc.page_content or ""
+        parts.append(text)
+        cursor += len(text) + 2
+    return "\n\n".join(parts), offsets
+
+
+def _page_for_offset(offset: int, offsets: list[tuple[int, int]]) -> int:
+    """Resolve the nearest page number for a given text offset."""
+    page = 0
+    for start, page_num in offsets:
+        if start <= offset:
+            page = page_num
+        else:
+            break
+    return int(page) + 1  # 1-indexed for human citations
+
+
+def _split_by_section(text: str) -> list[dict]:
+    """Best-effort section split using section-like headings."""
+    matches = []
+    for pattern in SECTION_PATTERNS:
+        matches.extend(list(pattern.finditer(text)))
+
+    if not matches:
+        return [{"section_number": None, "section_title": None, "text": text, "start_index": 0}]
+
+    # Sort by appearance in text
+    matches = sorted(matches, key=lambda m: m.start())
+
+    sections = []
+    for i, match in enumerate(matches):
+        start = match.start()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        section_text = text[start:end].strip()
+        section_number = match.group(1).strip() if match.group(1) else None
+        section_title = match.group(2).strip() if match.group(2) else None
+        sections.append({
+            "section_number": section_number,
+            "section_title": section_title,
+            "text": section_text,
+            "start_index": start,
+        })
+
+    return sections
+
+
 def transform_documents(documents: list[Any]) -> list[dict]:
     """
-    Split document pages into overlapping chunks.
-    No mock embeddings. No useless constant vectors.
-    Metadata fields: source, page (1-indexed), start_index, chunk_id.
+    Split document pages into overlapping chunks, preferring section boundaries.
+    Metadata fields: source, page (1-indexed), act_name, section_number, section_title, source_url.
     """
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE,
@@ -119,17 +211,39 @@ def transform_documents(documents: list[Any]) -> list[dict]:
         add_start_index=True,
     )
 
-    chunks = splitter.split_documents(documents)
+    by_source: dict[str, list[Document]] = defaultdict(list)
+    for doc in documents:
+        source = doc.metadata.get("source", "Unknown")
+        by_source[source].append(doc)
+
+    section_docs: list[Document] = []
+    for source, pages in by_source.items():
+        pages = sorted(pages, key=lambda d: d.metadata.get("page", 0))
+        full_text, offsets = _merge_pages(pages)
+        sections = _split_by_section(full_text)
+
+        act_name = pages[0].metadata.get("act_name") if pages else None
+        source_url = pages[0].metadata.get("source_url") if pages else None
+
+        for sec in sections:
+            page = _page_for_offset(sec["start_index"], offsets)
+            meta = {
+                "source": source,
+                "page": page,
+                "act_name": act_name,
+                "section_number": sec.get("section_number"),
+                "section_title": sec.get("section_title"),
+                "source_url": source_url,
+            }
+            section_docs.append(Document(page_content=sec["text"], metadata=meta))
+
+    chunks = splitter.split_documents(section_docs)
     logger.info("Chunking complete. Total chunks: %d", len(chunks))
 
     processed: list[dict] = []
     for idx, chunk in enumerate(chunks):
         try:
             meta = dict(chunk.metadata)
-            # Convert page to 1-indexed integer for human-readable citations
-            raw_page = meta.get("page", 0)
-            meta["page"] = int(raw_page) + 1 if isinstance(raw_page, (int, float)) else raw_page
-
             processed.append({
                 "chunk_id": idx,
                 "text": chunk.page_content,
@@ -138,9 +252,7 @@ def transform_documents(documents: list[Any]) -> list[dict]:
                 # Embeddings for Qdrant are computed separately in ingest_to_qdrant().
             })
         except Exception as exc:
-            logger.error(
-                "Failed to process chunk %d: %s", idx, exc, exc_info=True
-            )
+            logger.error("Failed to process chunk %d: %s", idx, exc, exc_info=True)
 
     logger.info("Transform complete. Processed chunks: %d", len(processed))
     return processed
@@ -262,6 +374,7 @@ def load_to_json(chunks: list[dict], output_path: Path) -> None:
 def run_pipeline(
     raw_data_dir: Path,
     output_file: Path,
+    include_all: bool = False,
     enable_qdrant: bool = False,
     qdrant_host: str = "localhost",
     qdrant_port: int = 6333,
@@ -271,10 +384,11 @@ def run_pipeline(
     logger.info("Nyaya Mitra — ETL Pipeline v2   START")
     logger.info("Input:  %s", raw_data_dir.resolve())
     logger.info("Output: %s", output_file.resolve())
+    logger.info("PDFs:   %s", "all PDFs" if include_all else "BNS/BNSS/BSA only")
     logger.info("Qdrant: %s", "ENABLED" if enable_qdrant else "disabled (BM25-only)")
     logger.info("=" * 60)
 
-    documents = extract_documents(raw_data_dir)
+    documents = extract_documents(raw_data_dir, include_all=include_all)
     if not documents:
         logger.error("No documents loaded. Aborting.")
         sys.exit(1)
@@ -347,10 +461,17 @@ For Qdrant, start the service first:
         "--qdrant-collection", default="nyaya_legal_chunks",
         help="Qdrant collection name (default: nyaya_legal_chunks)",
     )
+    parser.add_argument(
+        "--include-all",
+        action="store_true",
+        default=False,
+        help="Include non-criminal-law PDFs in ingestion (not recommended).",
+    )
     args = parser.parse_args()
     run_pipeline(
         raw_data_dir=args.dir,
         output_file=args.output,
+        include_all=args.include_all,
         enable_qdrant=args.qdrant,
         qdrant_host=args.qdrant_host,
         qdrant_port=args.qdrant_port,

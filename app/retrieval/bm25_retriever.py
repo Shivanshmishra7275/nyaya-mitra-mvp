@@ -38,6 +38,7 @@ class BM25Retriever:
         self._chunks: list[dict] = []
         self._index: Optional[BM25Okapi] = None
         self._loaded = False
+        self._act_names: set[str] = set()
 
     def load(self) -> bool:
         """Load the JSON chunk store and build the BM25 index. Returns True on success."""
@@ -55,6 +56,11 @@ class BM25Retriever:
             corpus = [_tokenize(chunk["text"]) for chunk in self._chunks]
             self._index = BM25Okapi(corpus)
             self._loaded = True
+            self._act_names = {
+                meta.get("act_name")
+                for meta in (c.get("metadata", {}) for c in self._chunks)
+                if meta.get("act_name")
+            }
             logger.info(
                 "BM25 index built: %d chunks from '%s'",
                 len(self._chunks),
@@ -72,6 +78,10 @@ class BM25Retriever:
     @property
     def chunk_count(self) -> int:
         return len(self._chunks)
+
+    @property
+    def act_names(self) -> set[str]:
+        return set(self._act_names)
 
     def retrieve(self, query: str, top_k: int = 15) -> list[dict]:
         """Return top_k chunks most relevant to the query by BM25 score."""

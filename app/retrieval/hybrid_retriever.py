@@ -59,10 +59,22 @@ class HybridRetriever:
             (chunks, retrieval_note) — note describes which retrievers fired.
         """
         bm25_results = self._bm25.retrieve(query, top_k=top_k)
+        act_names = sorted(self._bm25.act_names) if hasattr(self._bm25, "act_names") else []
+        expected = {
+            "Bharatiya Nyaya Sanhita, 2023",
+            "Bharatiya Nagarik Suraksha Sanhita, 2023",
+            "Bharatiya Sakshya Adhiniyam, 2023",
+        }
+        missing = sorted(expected - set(act_names)) if act_names else []
+        corpus_label = ", ".join(act_names) if act_names else "Unknown"
+        coverage_note = f"Corpus: {corpus_label}."
+        if missing:
+            coverage_note += f" Coverage incomplete (missing: {', '.join(missing)})."
+        coverage_note += " Sources are official act texts only (no case law)."
 
         # BM25-only path (fast, no Qdrant)
         if self._qdrant is None:
-            note = f"Retrieved {len(bm25_results[:top_k])} chunks via BM25-only."
+            note = f"Retrieved {len(bm25_results[:top_k])} chunks via BM25-only. {coverage_note}"
             logger.info(note)
             return bm25_results[:top_k], note
 
@@ -70,14 +82,14 @@ class HybridRetriever:
         try:
             semantic_results = self._qdrant.retrieve(query, top_k=top_k)
             merged = _apply_rrf(bm25_results, semantic_results, top_k=top_k)
-            note = f"Retrieved {len(merged)} chunks via Hybrid (BM25 + Semantic, RRF fusion)."
+            note = f"Retrieved {len(merged)} chunks via Hybrid (BM25 + Semantic, RRF fusion). {coverage_note}"
             logger.info(note)
             return merged, note
 
         except Exception as exc:
             logger.warning("Qdrant retrieval failed, falling back to BM25: %s", exc)
             fallback = bm25_results[:top_k]
-            note = f"Retrieved {len(fallback)} chunks via BM25-only (Qdrant unavailable)."
+            note = f"Retrieved {len(fallback)} chunks via BM25-only (Qdrant unavailable). {coverage_note}"
             logger.info(note)
             return fallback, note
 
