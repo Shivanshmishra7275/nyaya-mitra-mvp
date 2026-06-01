@@ -3,7 +3,7 @@ app/models/schemas.py
 =====================
 All Pydantic request and response models for the Nyaya Mitra API.
 """
-from typing import Optional
+from typing import Optional, Literal
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -42,14 +42,56 @@ class StrategyPath(BaseModel):
     risk: str = Field(description="Primary risk or downside of this path.")
 
 
+class Confidence(BaseModel):
+    """Confidence signal for the response, grounded in retrieval quality."""
+    label: str = Field(description="Low / Medium / High")
+    reason: str = Field(description="Reason for the confidence level")
+
+
 class QueryResponse(BaseModel):
     """Structured response for the Criminal Case Intelligence Assistant."""
+    # New structured fields (Phase 1+)
+    answer: str = Field(
+        default="",
+        description="Primary plain-language answer summary.",
+    )
+    legal_gps: str = Field(
+        default="",
+        description="Plain-language orientation of where the user stands procedurally.",
+    )
+    issue_graph: list[str] = Field(
+        default_factory=list,
+        description="Key legal issue nodes detected from the user's facts.",
+    )
+    opposition_view: list[str] = Field(
+        default_factory=list,
+        description="How the other side/police/court might argue or inspect the matter.",
+    )
+    strategy_tree: list[StrategyPath] = Field(
+        default_factory=list,
+        description="Structured strategy options with tradeoffs.",
+    )
+    confidence: Optional[Confidence] = Field(
+        None,
+        description="Confidence label and reason grounded in retrieval quality.",
+    )
+    next_actions: list[str] = Field(
+        default_factory=list,
+        description="Actionable immediate steps for the user.",
+    )
+    scope_status: Literal["in_scope", "partial_scope", "out_of_scope"] = Field(
+        default="in_scope",
+        description="Scope classification for Indian criminal-law coverage.",
+    )
+
+    # Backward-compatible fields (existing UI depends on these)
     legal_mapping: list[str] = Field(
         default_factory=list,
         description="Applicable legal sections (e.g., BNS Section 378).",
     )
     explanation: str = Field(
-        description="Plain-language explanation of how the law applies to the facts."
+        default="",
+        description="Plain-language explanation of how the law applies to the facts.",
     )
     weaknesses: list[str] = Field(
         default_factory=list,
@@ -60,6 +102,7 @@ class QueryResponse(BaseModel):
         description="Multiple strategic options for the user.",
     )
     lawyer_brief: str = Field(
+        default="",
         description="A concise, structured summary designed to be handed to a lawyer.",
     )
     citations: list[str] = Field(

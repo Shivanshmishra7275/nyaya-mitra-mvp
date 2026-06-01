@@ -118,11 +118,27 @@ async def legal_query(
             detail="An unexpected error occurred while generating the response.",
         ) from exc
 
+    answer = response_data.get("answer") or response_data.get("explanation", "")
+    explanation = response_data.get("explanation") or answer
+    strategy_tree = response_data.get("strategy_tree") or response_data.get("strategy_paths", [])
+    strategy_paths = response_data.get("strategy_paths") or strategy_tree
+
     return QueryResponse(
+        # New structured fields
+        answer=answer,
+        legal_gps=response_data.get("legal_gps", ""),
+        issue_graph=response_data.get("issue_graph", []),
+        opposition_view=response_data.get("opposition_view", []),
+        strategy_tree=strategy_tree,
+        confidence=response_data.get("confidence"),
+        next_actions=response_data.get("next_actions", []),
+        scope_status=response_data.get("scope_status", "in_scope"),
+
+        # Backward-compatible fields
         legal_mapping=response_data.get("legal_mapping", []),
-        explanation=response_data.get("explanation", ""),
+        explanation=explanation,
         weaknesses=response_data.get("weaknesses", []),
-        strategy_paths=response_data.get("strategy_paths", []),
+        strategy_paths=strategy_paths,
         lawyer_brief=response_data.get("lawyer_brief", ""),
         citations=response_data.get("citations", []),
         retrieval_note=retrieval_note,
