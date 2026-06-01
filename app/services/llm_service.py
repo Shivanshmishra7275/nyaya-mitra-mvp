@@ -19,6 +19,7 @@ import asyncio
 import json
 import logging
 import re
+from typing import Any
 
 from google import genai
 
@@ -49,10 +50,10 @@ def build_prompt(query: str, chunks: list[dict]) -> str:
 
     return f"""You are Nyaya Mitra, an Indian Criminal Case Intelligence Assistant.
 Your goal is to turn the user's messy fact scenario into a structured legal strategy.
-Use ONLY the following legal context (from BNS, BNSS, BSA) to answer the user's query.
-Do not use any outside knowledge.
+Use ONLY the following legal context (BNS, BNSS, BSA) to answer the user's query.
+Do NOT use outside knowledge or invent statutes/case law.
 
-CONTEXT:
+CONTEXT (authoritative, allowed to cite):
 {context_text}
 
 USER QUERY (FACTS): {query}
@@ -61,25 +62,45 @@ DISCLAIMER: You are an AI assistant providing legal intelligence, not legal advi
 
 INSTRUCTIONS:
 1. Base your answer strictly on the provided context.
-2. Output your response as a valid, raw JSON object exactly matching this schema:
+2. If the query is outside Indian criminal-law scope, set scope_status = "out_of_scope" and explain briefly.
+3. If context is weak or partial, set scope_status = "partial_scope" and lower confidence.
+4. Output a valid, raw JSON object EXACTLY matching this schema:
 {{
-    "legal_mapping": ["List of applicable legal sections (e.g., 'BNS Sec 378')"],
-    "explanation": "Clear, plain-language explanation of how the law applies to these facts.",
-    "weaknesses": ["List of identified weak points, contradictions, or missing evidence in the user's facts"],
-    "strategy_paths": [
+    "answer": "Short plain-language summary.",
+    "legal_gps": "Where the user stands procedurally (plain language).",
+    "issue_graph": ["Key issue node 1", "Key issue node 2"],
+    "opposition_view": ["How the other side/police/court might respond"],
+    "strategy_tree": [
         {{
-            "path_name": "Name of the strategy (e.g., 'Anticipatory Bail Route')",
-            "when_suitable": "When this path is best.",
-            "benefit": "Primary benefit.",
-            "risk": "Primary risk."
+            "path_name": "Strategy name",
+            "when_suitable": "When this path is appropriate",
+            "benefit": "Primary benefit",
+            "risk": "Primary risk"
         }}
     ],
-    "lawyer_brief": "A concise, structured summary of the facts, issues, and goals, ready to be handed to a human lawyer.",
-    "citations": ["List of sources used (e.g., 'BNS Page 14')"]
+    "confidence": {{
+        "label": "Low | Medium | High",
+        "reason": "Reason grounded in the retrieved context"
+    }},
+    "next_actions": ["Immediate, safe next steps"],
+    "scope_status": "in_scope | partial_scope | out_of_scope",
+
+    "legal_mapping": ["Applicable legal sections from context only"],
+    "explanation": "Plain-language explanation tied to the context",
+    "weaknesses": ["Missing evidence, contradictions, uncertainties"],
+    "strategy_paths": [
+        {{
+            "path_name": "Strategy name",
+            "when_suitable": "When this path is appropriate",
+            "benefit": "Primary benefit",
+            "risk": "Primary risk"
+        }}
+    ],
+    "lawyer_brief": "Concise brief for lawyer consultation.",
+    "citations": ["Source names/pages from context only"]
 }}
-3. DO NOT wrap the JSON in markdown or code blocks. Return ONLY the raw JSON string.
-4. Focus on identifying missing evidence, opponent perspectives, and realistic strategic options.
-5. If the context does not contain enough information, note this explicitly in the 'weaknesses' and 'explanation' fields.
+5. DO NOT wrap the JSON in markdown or code blocks. Return ONLY the raw JSON string.
+6. If context does not support a claim, say so in explanation and weaknesses and lower confidence.
 """
 
 
@@ -112,6 +133,79 @@ def _extract_json_from_response(raw_text: str) -> str:
     return raw_text
 
 
+def _normalize_str_list(value: Any) -> list[str]:
+    if not value:
+        return []
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if str(v).strip()]
+    return [str(value).strip()]
+
+
+def _is_clear_out_of_scope(query: str) -> bool:
+    """Conservative classifier for clearly non-criminal queries."""
+    q = query.lower()
+    civil_only = [
+        "divorce", "custody", "maintenance", "alimony", "property dispute", "partition",
+        "rent", "tenant", "landlord", "contract", "agreement", "breach", "employment",
+        "salary", "tax", "gst", "company", "trademark", "copyright", "patent",
+        "consumer", "insurance claim", "will", "probate",
+    ]
+    criminal_hints = [
+        "fir", "police", "arrest", "bail", "charge", "ipc", "bns", "bnss", "bsa",
+        "theft", "fraud", "cheating", "assault", "murder", "kidnap", "extortion",
+        "robbery", "molestation", "stalking", "dowry", "domestic violence",
+        "forgery", "criminal",
+    ]
+    if any(h in q for h in criminal_hints):
+        return False
+    return any(c in q for c in civil_only)
+
+
+def _build_out_of_scope_response(query: str) -> dict:
+    return {
+        "scope_status": "out_of_scope",
+        "answer": (
+            "Nyaya Mitra currently covers Indian criminal law (BNS/BNSS/BSA). "
+            "Your query appears to be outside that scope."
+        ),
+        "legal_gps": "",
+        "issue_graph": [],
+        "opposition_view": [],
+        "strategy_tree": [],
+        "confidence": {"label": "Low", "reason": "Query appears outside criminal-law scope."},
+        "next_actions": [
+            "Consult a qualified lawyer for the relevant area of law.",
+            "If this relates to a criminal complaint, provide specific criminal-law facts.",
+        ],
+        "legal_mapping": [],
+        "explanation": "",
+        "weaknesses": [],
+        "lawyer_brief": "",
+        "citations": [],
+    }
+
+
+def _fallback_response(query: str, reason: str) -> dict:
+    return {
+        "scope_status": "partial_scope",
+        "answer": "Unable to generate a structured response with high confidence.",
+        "legal_gps": "",
+        "issue_graph": [],
+        "opposition_view": [],
+        "strategy_tree": [],
+        "confidence": {"label": "Low", "reason": reason},
+        "next_actions": [
+            "Rephrase your facts with dates, actions, and evidence details.",
+            "Consult a qualified lawyer for urgent matters.",
+        ],
+        "legal_mapping": [],
+        "explanation": "",
+        "weaknesses": [],
+        "lawyer_brief": "",
+        "citations": [],
+    }
+
+
 def _call_gemini_sync(client: genai.Client, prompt: str) -> str:
     """
     Synchronous Gemini call — intended to be run in a thread via asyncio.to_thread().
@@ -123,6 +217,45 @@ def _call_gemini_sync(client: genai.Client, prompt: str) -> str:
         config={"temperature": settings.LLM_TEMPERATURE},
     )
     return response.text
+
+
+def _repair_prompt(raw_text: str) -> str:
+    return (
+        "Fix the following text into a valid JSON object that matches the exact schema below. "
+        "Do not add new information, only repair structure and formatting. "
+        "Return ONLY the JSON.\n\n"
+        "SCHEMA:\n"
+        "{\n"
+        "  \"scope_status\": \"in_scope|partial_scope|out_of_scope\",\n"
+        "  \"answer\": \"\",\n"
+        "  \"legal_gps\": \"\",\n"
+        "  \"issue_graph\": [],\n"
+        "  \"opposition_view\": [],\n"
+        "  \"strategy_tree\": [{\"path_name\":\"\",\"when_suitable\":\"\",\"benefit\":\"\",\"risk\":\"\"}],\n"
+        "  \"confidence\": {\"label\":\"Low|Medium|High\",\"reason\":\"\"},\n"
+        "  \"next_actions\": [],\n"
+        "  \"legal_mapping\": [],\n"
+        "  \"explanation\": \"\",\n"
+        "  \"weaknesses\": [],\n"
+        "  \"lawyer_brief\": \"\",\n"
+        "  \"citations\": []\n"
+        "}\n\n"
+        f"TEXT TO FIX:\n{raw_text}"
+    )
+
+
+async def _attempt_repair(client: genai.Client, raw_text: str) -> str:
+    prompt = _repair_prompt(raw_text)
+    return await asyncio.to_thread(_call_gemini_sync, client, prompt)
+
+
+def _derive_confidence(chunks: list[dict], response: dict) -> dict:
+    total_chars = sum(len(c.get("text", "")) for c in chunks)
+    if len(chunks) == 0 or total_chars < 400:
+        return {"label": "Low", "reason": "Limited retrieval context was available."}
+    if len(chunks) < 3:
+        return {"label": "Medium", "reason": "Some relevant context found, but coverage is limited."}
+    return {"label": "Medium", "reason": "Context retrieved; verify with a lawyer for certainty."}
 
 
 async def generate_legal_response(
@@ -145,12 +278,15 @@ async def generate_legal_response(
         max_retries: Number of times to retry on transient failures.
 
     Returns:
-        dict with keys: explanation, citations, suggested_next_steps
+        dict with structured legal response fields (answer, scope_status, etc.).
 
     Raises:
         ValueError: if the LLM returns invalid JSON after all retries.
         Exception:  propagated from Gemini SDK on non-transient API errors.
     """
+    if _is_clear_out_of_scope(query):
+        return _build_out_of_scope_response(query)
+
     # Audit log — masked key only, never full key
     logger.info(
         "LLM call initiated. Model=%s Key=%s Chunks=%d",
@@ -176,31 +312,32 @@ async def generate_legal_response(
             try:
                 result = json.loads(clean)
             except json.JSONDecodeError as exc:
-                logger.error(
-                    "LLM output was not valid JSON (attempt %d/%d). Raw (first 300 chars): %.300s",
-                    attempt, max_retries, clean,
-                )
-                raise ValueError(f"LLM returned malformed JSON: {exc}") from exc
+                last_exc = exc
+                logger.warning("Malformed JSON returned. Attempting repair.")
+                try:
+                    repaired = await _attempt_repair(client, raw_text)
+                    repaired_clean = _extract_json_from_response(repaired)
+                    result = json.loads(repaired_clean)
+                except Exception as repair_exc:
+                    last_exc = repair_exc
+                    return _fallback_response(query, "Model returned invalid JSON after repair.")
 
-            # Validate required keys are present
-            required = {"legal_mapping", "explanation", "weaknesses", "strategy_paths", "lawyer_brief", "citations"}
-            missing = required - result.keys()
-            if missing:
-                logger.warning(
-                    "LLM JSON missing expected keys: %s. Filling with defaults.", missing
-                )
-                result.setdefault("legal_mapping", [])
-                result.setdefault("explanation", "Could not generate an explanation.")
-                result.setdefault("weaknesses", [])
-                result.setdefault("strategy_paths", [])
-                result.setdefault("lawyer_brief", "Could not generate brief.")
-                result.setdefault("citations", [])
+            # Normalize and validate key fields
+            result.setdefault("scope_status", "in_scope")
+            result.setdefault("answer", result.get("explanation", ""))
+            result.setdefault("legal_gps", "")
+            result["issue_graph"] = _normalize_str_list(result.get("issue_graph"))
+            result["opposition_view"] = _normalize_str_list(result.get("opposition_view"))
+            result["next_actions"] = _normalize_str_list(result.get("next_actions"))
+            result["legal_mapping"] = _normalize_str_list(result.get("legal_mapping"))
+            result["weaknesses"] = _normalize_str_list(result.get("weaknesses"))
+            result["citations"] = _normalize_str_list(result.get("citations"))
+            result.setdefault("explanation", "")
+            result.setdefault("lawyer_brief", "")
 
-            # Ensure strategy_paths is a list of dicts
-            if not isinstance(result.get("strategy_paths"), list):
-                result["strategy_paths"] = []
-            
-            for path in result["strategy_paths"]:
+            if not isinstance(result.get("strategy_tree"), list):
+                result["strategy_tree"] = []
+            for path in result["strategy_tree"]:
                 if not isinstance(path, dict):
                     continue
                 path.setdefault("path_name", "Unknown Strategy")
@@ -208,15 +345,22 @@ async def generate_legal_response(
                 path.setdefault("benefit", "Unknown")
                 path.setdefault("risk", "Unknown")
 
+            if not isinstance(result.get("confidence"), dict):
+                result["confidence"] = _derive_confidence(chunks, result)
+            else:
+                # Force low confidence if retrieval is weak
+                if len(chunks) < 3:
+                    result["confidence"] = _derive_confidence(chunks, result)
+
             logger.info("LLM call successful on attempt %d.", attempt)
             return result
 
         except ValueError as exc:
-            # JSON parsing error — retry once with async backoff (does NOT block event loop)
-            last_exc = exc  # store the instance, not the class
+            # Generic parsing or empty response error — retry once with async backoff
+            last_exc = exc
             if attempt < max_retries:
                 logger.warning("Retrying LLM call in 2s (attempt %d/%d)...", attempt, max_retries)
-                await asyncio.sleep(2)  # ← asyncio.sleep, not time.sleep
+                await asyncio.sleep(2)
             continue
 
         except Exception as exc:
@@ -224,4 +368,4 @@ async def generate_legal_response(
             logger.error("Gemini API error: %s", exc, exc_info=True)
             raise
 
-    raise ValueError(f"LLM failed to return valid JSON after {max_retries} attempts.") from last_exc
+    return _fallback_response(query, "Model failed to return valid JSON.")
