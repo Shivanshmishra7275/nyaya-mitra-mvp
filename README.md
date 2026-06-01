@@ -21,6 +21,34 @@ While most legal AI tools compete on database size and act like generic search e
 
 ---
 
+## ✅ Current Scope (Honest)
+
+**In scope:** Indian criminal-law intelligence grounded in official BNS/BNSS/BSA texts.
+
+**Out of scope:** Civil law, tax, corporate, IP, family disputes, and other non-criminal areas.
+
+If a query is clearly outside criminal-law scope, Nyaya Mitra returns a structured **out_of_scope** response instead of guessing.
+
+---
+
+## 📚 Official Corpus Sources (MHA)
+
+Nyaya Mitra only ingests official Government of India / MHA sources:
+
+- BNS (Bharatiya Nyaya Sanhita, 2023)
+- BNSS (Bharatiya Nagarik Suraksha Sanhita, 2023)
+- BSA (Bharatiya Sakshya Adhiniyam, 2023)
+
+Source page: https://www.mha.gov.in/en/commoncontent/new-criminal-laws
+
+Direct PDFs used by default:
+- https://www.mha.gov.in/sites/default/files/250883_english_01042024.pdf
+- https://www.mha.gov.in/sites/default/files/2024-04/250884_2_english_01042024.pdf
+
+No case-law corpus is bundled in this MVP. The retrieval layer is **act-text only**.
+
+---
+
 ## 🏗️ Architecture — Zero Cost by Design
 
 ```
@@ -28,7 +56,7 @@ Users
 ├── 📱 Mobile App (Expo / React Native)   ──┐
 └── 🌐 Web App (Pure HTML/CSS/JS)         ──┤──→ FastAPI Backend ──→ Google Gemini API
                                              │       (Render Free Tier)    (User's Own Key)
-                                             └── BM25/Qdrant Hybrid Retrieval
+                                             └── BM25/Qdrant Hybrid Retrieval (official act texts only)
 ```
 
 ### Why Zero Cost?
@@ -59,6 +87,9 @@ venv\Scripts\activate        # Windows
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Ingest official BNS/BNSS/BSA PDFs into BM25 store
+python etl_pipeline.py
 
 # Start the server
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -118,6 +149,47 @@ nyaya-mitra-mvp/
 ## ⚠️ Legal Disclaimer
 
 Nyaya Mitra provides **legal intelligence and structured case analysis, not legal advice**. It is designed to prepare users for a productive consultation with a qualified human lawyer. Always consult a legal professional for your specific situation.
+
+---
+
+## 📦 Response Contract (Structured)
+
+Every response is a structured JSON object with:
+- answer
+- legal_gps
+- issue_graph
+- opposition_view
+- strategy_tree
+- confidence
+- next_actions
+- scope_status
+- legal_mapping / explanation / weaknesses / lawyer_brief / citations
+
+The UI renders each section as a card only when data is present.
+
+---
+
+## 🚧 Known Limitations (MVP)
+
+- No case-law reasoning yet (acts-only corpus).
+- BNS/BNSS/BSA PDFs must be present in Raw_Data/ for ingestion.
+- Answers are only as reliable as the retrieved sections.
+- This is a decision-support assistant, not a replacement for a lawyer.
+
+---
+
+## 🛰️ Render Deployment (Free Tier)
+
+1. Push this repo to GitHub.
+2. Create a new Render Web Service.
+3. Build command: `pip install -r requirements.txt`
+4. Start command: `uvicorn app.main:app --host 0.0.0.0 --port 8000`
+5. Set env vars:
+    - `APP_ENV=production`
+    - `ALLOWED_ORIGINS=<your frontend url>`
+    - `GEMINI_API_KEY` (optional; BYOK preferred)
+
+Render will run on the free tier and your users can still use BYOK keys.
 
 ---
 
