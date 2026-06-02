@@ -20,7 +20,11 @@ from slowapi.util import get_remote_address
 
 from app.core.config import get_settings
 from app.models.schemas import QueryRequest, QueryResponse
-from app.services.llm_service import generate_legal_response
+from app.services.llm_service import (
+    generate_legal_response,
+    is_clear_out_of_scope,
+    build_out_of_scope_response,
+)
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -68,6 +72,27 @@ async def legal_query(
     request: Request,
     authorization: Optional[str] = Header(None),
 ):
+    # ── Early scope check (skip retrieval + key if clearly out of scope) ─────
+    if is_clear_out_of_scope(request_body.user_query):
+        response_data = build_out_of_scope_response(request_body.user_query)
+        return QueryResponse(
+            answer=response_data.get("answer", ""),
+            legal_gps=response_data.get("legal_gps", ""),
+            issue_graph=response_data.get("issue_graph", []),
+            opposition_view=response_data.get("opposition_view", []),
+            strategy_tree=response_data.get("strategy_tree", []),
+            confidence=response_data.get("confidence"),
+            next_actions=response_data.get("next_actions", []),
+            scope_status=response_data.get("scope_status", "out_of_scope"),
+            legal_mapping=response_data.get("legal_mapping", []),
+            explanation=response_data.get("explanation", ""),
+            weaknesses=response_data.get("weaknesses", []),
+            strategy_paths=response_data.get("strategy_paths", []),
+            lawyer_brief=response_data.get("lawyer_brief", ""),
+            citations=response_data.get("citations", []),
+            retrieval_note="Out of scope query. Retrieval skipped.",
+        )
+
     # ── Resolve API key: BYOK takes priority over server default ─────────────
     api_key = _extract_api_key(authorization) or settings.GEMINI_API_KEY
 
@@ -93,9 +118,39 @@ async def legal_query(
     chunks, retrieval_note = retriever.retrieve(request_body.user_query, top_k=settings.BM25_TOP_K)
 
     if not chunks:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No relevant legal text found for your query. Try rephrasing.",
+        response_data = {
+            "scope_status": "partial_scope",
+            "answer": (
+                "I could not find relevant BNS/BNSS/BSA sections for this query in the current corpus. "
+                "Try rephrasing with specific criminal-law facts, dates, and actions."
+            ),
+            "legal_gps": "No Relevant Law Found",
+            "confidence": {
+                "label": "Low",
+                "reason": "No relevant act text was retrieved for this query.",
+            },
+            "next_actions": [
+                "Rephrase with clearer criminal-law facts and a timeline.",
+                "Consult a qualified lawyer for urgent matters.",
+            ],
+            "explanation": "No relevant legal text could be matched to your facts.",
+        }
+        return QueryResponse(
+            answer=response_data.get("answer", ""),
+            legal_gps=response_data.get("legal_gps", ""),
+            issue_graph=[],
+            opposition_view=[],
+            strategy_tree=[],
+            confidence=response_data.get("confidence"),
+            next_actions=response_data.get("next_actions", []),
+            scope_status="partial_scope",
+            legal_mapping=[],
+            explanation=response_data.get("explanation", ""),
+            weaknesses=[],
+            strategy_paths=[],
+            lawyer_brief="",
+            citations=[],
+            retrieval_note="No relevant act text found in the current corpus.",
         )
 
     # ── LLM Generation ───────────────────────────────────────────────────────
