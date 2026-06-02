@@ -23,11 +23,11 @@ While most legal AI tools compete on database size and act like generic search e
 
 ## ✅ Current Scope (Honest)
 
-**In scope:** Indian criminal-law intelligence grounded in official BNS/BNSS/BSA texts.
+**In scope:** Indian criminal-law intelligence grounded exclusively in official BNS/BNSS/BSA texts.
 
-**Out of scope:** Civil law, tax, corporate, IP, family disputes, and other non-criminal areas.
+**Out of scope:** Civil law, tax, corporate, IP, family disputes, and other non-criminal areas. Note that this MVP does **NOT** include full Indian law or past case-law precedents.
 
-If a query is clearly outside criminal-law scope, Nyaya Mitra returns a structured **out_of_scope** response instead of guessing.
+If a query is clearly outside criminal-law scope, Nyaya Mitra returns a structured **out_of_scope** response instead of guessing or hallucinating.
 
 ---
 
@@ -94,6 +94,25 @@ python etl_pipeline.py
 # Start the server
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+### 2b. Smoke Tests (Structured Response)
+To verify the structured output logic safely without a UI, run:
+```bash
+# Offline (mock) unit tests
+pytest tests/test_api.py -v
+
+# Live end-to-end smoke tests (requires local server running)
+# set GEMINI_API_KEY=your_key (Windows) or export GEMINI_API_KEY=your_key (Mac/Linux)
+python smoke_test.py
+```
+
+Sample **in-scope** query:
+- "Someone stole my phone from my office desk yesterday."
+
+Sample **out-of-scope** query:
+- "How do I file for divorce and child custody in India?"
+
+**partial_scope** means: the query touches criminal law but lacks enough detail or facts to map confidently to BNS/BNSS/BSA.
 
 API is now live at: **http://localhost:8000**
 - Health check: http://localhost:8000/health
@@ -166,6 +185,22 @@ Every response is a structured JSON object with:
 - legal_mapping / explanation / weaknesses / lawyer_brief / citations
 
 The UI renders each section as a card only when data is present.
+
+---
+
+## 🎬 2–3 Minute Demo Script
+
+1. Run ingestion: `python etl_pipeline.py` (Ensure official MHA PDFs are in `Raw_Data/`)
+2. Start API: `uvicorn app.main:app --reload`
+3. Start frontend (optional): `cd nyaya-mitra-app && npx expo start --web`
+4. Use `python smoke_test.py` to quickly validate the 3 canonical response shapes.
+5. In the UI, enter a BYOK key.
+6. Try an in-scope query (theft/assault) and show:
+    - Legal GPS
+    - Issue graph
+    - Strategy options
+    - Confidence + next actions
+7. Try an out-of-scope query ("How to file for divorce?") and show the polite, structured **out_of_scope** rejection that avoids hallucinations.
 
 ---
 
