@@ -22,7 +22,11 @@ def main():
     print("  Nyaya Mitra — Backend Startup")
     print("=" * 50)
 
-    # Check if vector store exists
+    # 1. Download Corpus if missing
+    print("\n[INFO] Checking for official corpus PDFs...")
+    subprocess.run([sys.executable, "download_corpus.py"], cwd=project_root)
+
+    # 2. Check if vector store exists
     store = project_root / "vector_store_mock.json"
     if not store.exists():
         print("\n[WARN] vector_store_mock.json not found.")
