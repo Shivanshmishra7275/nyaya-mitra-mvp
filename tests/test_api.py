@@ -199,3 +199,88 @@ def test_e2e_smoke_health_and_retrieval_path(client):
         assert "text" in chunk and len(chunk["text"]) > 10
         assert "metadata" in chunk
         assert "source" in chunk["metadata"]
+
+
+# ─── Structured response smoke tests ─────────────────────────────────────────
+
+def test_structured_response_in_scope(client, monkeypatch):
+    import app.api.routes.query as q_module
+
+    async def fake_generate(*_, **__):
+        return {
+            "scope_status": "in_scope",
+            "answer": "This appears to involve theft under BNS.",
+            "legal_gps": "Pre-FIR stage based on the facts provided.",
+            "issue_graph": ["Alleged taking of property", "Intent to dishonestly take"],
+            "opposition_view": ["Challenge intent", "Question evidence"],
+            "strategy_tree": [
+                {
+                    "path_name": "Complaint route",
+                    "when_suitable": "Clear facts and witnesses",
+                    "benefit": "Formal action",
+                    "risk": "Weak evidence may backfire",
+                }
+            ],
+            "confidence": {"label": "Medium", "reason": "Relevant act text retrieved."},
+            "next_actions": ["List witnesses", "Collect any CCTV evidence"],
+            "legal_mapping": ["BNS Section 303"],
+            "explanation": "Based on the act text, theft may apply.",
+            "weaknesses": ["No witness statements yet"],
+            "lawyer_brief": "Summary for lawyer.",
+            "citations": ["bns.pdf Page 12"],
+        }
+
+    monkeypatch.setattr(q_module, "generate_legal_response", fake_generate)
+
+    resp = client.post(
+        "/api/v1/legal-query",
+        json={"user_query": "Someone took my phone from my desk."},
+        headers={"Authorization": "Bearer test-key"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    for field in ("answer", "retrieval_note", "confidence", "scope_status", "next_actions"):
+        assert field in body
+    assert body["scope_status"] == "in_scope"
+
+
+def test_structured_response_partial_scope(client, monkeypatch):
+    import app.api.routes.query as q_module
+
+    async def fake_generate(*_, **__):
+        return {
+            "scope_status": "partial_scope",
+            "answer": "Some criminal elements may apply, but details are unclear.",
+            "confidence": {"label": "Low", "reason": "Ambiguous facts."},
+            "next_actions": ["Clarify dates and evidence."],
+            "legal_mapping": [],
+            "explanation": "",
+            "weaknesses": ["Missing timeline"],
+            "strategy_tree": [],
+            "citations": [],
+        }
+
+    monkeypatch.setattr(q_module, "generate_legal_response", fake_generate)
+
+    resp = client.post(
+        "/api/v1/legal-query",
+        json={"user_query": "There was an argument at work and someone felt threatened."},
+        headers={"Authorization": "Bearer test-key"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    for field in ("answer", "retrieval_note", "confidence", "scope_status", "next_actions"):
+        assert field in body
+    assert body["scope_status"] == "partial_scope"
+
+
+def test_out_of_scope_returns_structured_without_key(client):
+    resp = client.post(
+        "/api/v1/legal-query",
+        json={"user_query": "How do I file for divorce and child custody?"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["scope_status"] == "out_of_scope"
+    for field in ("answer", "retrieval_note", "confidence", "scope_status", "next_actions"):
+        assert field in body
