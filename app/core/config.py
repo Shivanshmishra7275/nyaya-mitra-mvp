@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     QDRANT_HOST: str = "localhost"
     QDRANT_PORT: int = 6333
     QDRANT_COLLECTION: str = "nyaya_legal_chunks"
-    QDRANT_ENABLED: bool = False  # Set to True once Qdrant is running
+    QDRANT_ENABLED: bool = True  # Try Qdrant by default, gracefully falls back to BM25 if offline
 
     # ── LLM ───────────────────────────────────────────────────────────────────
     GEMINI_MODEL: str = "gemini-2.5-flash"
