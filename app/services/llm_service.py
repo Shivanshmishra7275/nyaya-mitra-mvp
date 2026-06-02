@@ -43,8 +43,14 @@ def build_prompt(query: str, chunks: list[dict]) -> str:
         meta = c.get("metadata", {})
         source = meta.get("source", "Unknown")
         page = meta.get("page", "?")
+        section = meta.get("section_number", "")
+        title = meta.get("section_title", "")
+        
+        sec_str = f", Section {section}" if section else ""
+        title_str = f" - {title}" if title else ""
+        
         text = c.get("text", "")
-        context_parts.append(f"Source: {source} (Page {page})\n{text}")
+        context_parts.append(f"Source: {source} (Page {page}{sec_str}){title_str}\n{text}")
 
     context_text = "\n\n---\n\n".join(context_parts)
 
@@ -101,6 +107,7 @@ INSTRUCTIONS:
 }}
 5. DO NOT wrap the JSON in markdown or code blocks. Return ONLY the raw JSON string.
 6. If context does not support a claim, say so in explanation and weaknesses and lower confidence.
+7. For citations, use the format 'Act Name, Section X' (e.g., 'BNS, Section 303') if available, rather than just PDF names and pages.
 """
 
 
@@ -141,6 +148,12 @@ def _normalize_str_list(value: Any) -> list[str]:
     return [str(value).strip()]
 
 
+def _coerce_str(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
 def _is_clear_out_of_scope(query: str) -> bool:
     """Conservative classifier for clearly non-criminal queries."""
     q = query.lower()
@@ -165,42 +178,55 @@ def _build_out_of_scope_response(query: str) -> dict:
     return {
         "scope_status": "out_of_scope",
         "answer": (
-            "Nyaya Mitra currently covers Indian criminal law (BNS/BNSS/BSA). "
-            "Your query appears to be outside that scope."
+            "Nyaya Mitra currently focuses exclusively on Indian criminal law (BNS, BNSS, BSA). "
+            "Your query appears to be related to civil, family, corporate, or other non-criminal matters."
         ),
-        "legal_gps": "",
+        "legal_gps": "Outside Criminal Jurisdiction",
         "issue_graph": [],
         "opposition_view": [],
         "strategy_tree": [],
-        "confidence": {"label": "Low", "reason": "Query appears outside criminal-law scope."},
+        "confidence": {"label": "Low", "reason": "Query is outside the criminal-law knowledge base."},
         "next_actions": [
-            "Consult a qualified lawyer for the relevant area of law.",
-            "If this relates to a criminal complaint, provide specific criminal-law facts.",
+            "Consult a specialized lawyer for the relevant area of law.",
+            "If there is a criminal element (e.g., fraud, physical assault), please rephrase to highlight those specific facts.",
         ],
         "legal_mapping": [],
-        "explanation": "",
+        "explanation": "No criminal law analysis was performed.",
         "weaknesses": [],
         "lawyer_brief": "",
         "citations": [],
     }
 
 
+def is_clear_out_of_scope(query: str) -> bool:
+    """Public wrapper for scope classification (used by API layer)."""
+    return _is_clear_out_of_scope(query)
+
+
+def build_out_of_scope_response(query: str) -> dict:
+    """Public wrapper to construct the structured out-of-scope response."""
+    return _build_out_of_scope_response(query)
+
+
 def _fallback_response(query: str, reason: str) -> dict:
     return {
         "scope_status": "partial_scope",
-        "answer": "Unable to generate a structured response with high confidence.",
-        "legal_gps": "",
+        "answer": (
+            "I could not confidently map your facts to the Bharatiya Nyaya Sanhita (BNS) or related criminal laws using the current context. "
+            "This could be due to ambiguous facts or missing details."
+        ),
+        "legal_gps": "Ambiguous/Unmapped",
         "issue_graph": [],
         "opposition_view": [],
         "strategy_tree": [],
         "confidence": {"label": "Low", "reason": reason},
         "next_actions": [
-            "Rephrase your facts with dates, actions, and evidence details.",
-            "Consult a qualified lawyer for urgent matters.",
+            "Rephrase your facts to include specific actions, dates, and evidence.",
+            "Consult a qualified legal professional for personalized advice.",
         ],
         "legal_mapping": [],
-        "explanation": "",
-        "weaknesses": [],
+        "explanation": "Unable to provide a detailed explanation due to low confidence in mapping the facts.",
+        "weaknesses": ["Insufficient factual detail to determine legal standing."],
         "lawyer_brief": "",
         "citations": [],
     }
@@ -252,10 +278,25 @@ async def _attempt_repair(client: genai.Client, raw_text: str) -> str:
 def _derive_confidence(chunks: list[dict], response: dict) -> dict:
     total_chars = sum(len(c.get("text", "")) for c in chunks)
     if len(chunks) == 0 or total_chars < 400:
-        return {"label": "Low", "reason": "Limited retrieval context was available."}
+        return {"label": "Low", "reason": "Limited retrieval context available for this query."}
     if len(chunks) < 3:
-        return {"label": "Medium", "reason": "Some relevant context found, but coverage is limited."}
-    return {"label": "Medium", "reason": "Context retrieved; verify with a lawyer for certainty."}
+        return {"label": "Medium", "reason": "Some context found, but coverage may be incomplete."}
+    return {"label": "Medium", "reason": "Relevant context retrieved; verify with a lawyer for certainty."}
+
+
+def _normalize_strategy_list(value: Any) -> list[dict]:
+    if not isinstance(value, list):
+        return []
+    cleaned = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        item.setdefault("path_name", "Unknown Strategy")
+        item.setdefault("when_suitable", "Unknown")
+        item.setdefault("benefit", "Unknown")
+        item.setdefault("risk", "Unknown")
+        cleaned.append(item)
+    return cleaned
 
 
 async def generate_legal_response(
@@ -323,34 +364,46 @@ async def generate_legal_response(
                     return _fallback_response(query, "Model returned invalid JSON after repair.")
 
             # Normalize and validate key fields
-            result.setdefault("scope_status", "in_scope")
-            result.setdefault("answer", result.get("explanation", ""))
-            result.setdefault("legal_gps", "")
+            scope = _coerce_str(result.get("scope_status") or "in_scope")
+            if scope not in {"in_scope", "partial_scope", "out_of_scope"}:
+                scope = "partial_scope"
+            result["scope_status"] = scope
+
+            result["answer"] = _coerce_str(result.get("answer") or result.get("explanation"))
+            result["legal_gps"] = _coerce_str(result.get("legal_gps"))
+            result["explanation"] = _coerce_str(result.get("explanation"))
+            result["lawyer_brief"] = _coerce_str(result.get("lawyer_brief"))
+
             result["issue_graph"] = _normalize_str_list(result.get("issue_graph"))
             result["opposition_view"] = _normalize_str_list(result.get("opposition_view"))
             result["next_actions"] = _normalize_str_list(result.get("next_actions"))
             result["legal_mapping"] = _normalize_str_list(result.get("legal_mapping"))
             result["weaknesses"] = _normalize_str_list(result.get("weaknesses"))
             result["citations"] = _normalize_str_list(result.get("citations"))
-            result.setdefault("explanation", "")
-            result.setdefault("lawyer_brief", "")
 
-            if not isinstance(result.get("strategy_tree"), list):
-                result["strategy_tree"] = []
-            for path in result["strategy_tree"]:
-                if not isinstance(path, dict):
-                    continue
-                path.setdefault("path_name", "Unknown Strategy")
-                path.setdefault("when_suitable", "Unknown")
-                path.setdefault("benefit", "Unknown")
-                path.setdefault("risk", "Unknown")
+            result["strategy_tree"] = _normalize_strategy_list(result.get("strategy_tree"))
+            result["strategy_paths"] = _normalize_strategy_list(result.get("strategy_paths"))
 
             if not isinstance(result.get("confidence"), dict):
                 result["confidence"] = _derive_confidence(chunks, result)
+            elif len(chunks) < 3:
+                result["confidence"] = _derive_confidence(chunks, result)
             else:
-                # Force low confidence if retrieval is weak
-                if len(chunks) < 3:
-                    result["confidence"] = _derive_confidence(chunks, result)
+                result["confidence"].setdefault("label", "Medium")
+                result["confidence"].setdefault("reason", "Context retrieved; verify with a lawyer for certainty.")
+
+            if scope == "out_of_scope":
+                # Prevent overclaiming in out-of-scope responses
+                result["legal_mapping"] = []
+                result["citations"] = []
+                result["strategy_tree"] = []
+                result["strategy_paths"] = []
+                result["weaknesses"] = []
+                result["issue_graph"] = []
+                result["opposition_view"] = []
+                result["legal_gps"] = ""
+                result["explanation"] = ""
+                result["lawyer_brief"] = ""
 
             logger.info("LLM call successful on attempt %d.", attempt)
             return result
