@@ -82,6 +82,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('char-count').textContent = `${len} / 1000`;
     document.getElementById('send-btn').disabled = len < 3 || state.isLoading;
   });
+
+  // Initialize Lucide icons
+  lucide.createIcons();
 });
 
 // ─── Sidebar extras (API URL config) ─────────────────────────────────────────
@@ -140,17 +143,25 @@ async function checkServer() {
     const data = await res.json();
 
     state.serverHealthy = true;
-    dot.textContent  = '🟢';
-    mob.textContent  = '🟢';
+    dot.className = 'server-icon';
+    dot.setAttribute('data-lucide', 'check-circle-2');
+    dot.style.color = 'var(--success-text)';
+    
+    mob.innerHTML = '<i data-lucide="check-circle-2" style="color:var(--success-text)"></i>';
     text.textContent = `${data.retrieval_mode || 'Ready'} · ${data.chunks_loaded ?? 0} chunks`;
     document.getElementById('offline-banner').classList.add('hidden');
+    lucide.createIcons();
 
   } catch (err) {
     state.serverHealthy = false;
-    dot.textContent  = '🔴';
-    mob.textContent  = '🔴';
+    dot.className = 'server-icon';
+    dot.setAttribute('data-lucide', 'x-circle');
+    dot.style.color = 'var(--error-text)';
+    
+    mob.innerHTML = '<i data-lucide="x-circle" style="color:var(--error-text)"></i>';
     text.textContent = 'Unreachable';
     document.getElementById('offline-banner').classList.remove('hidden');
+    lucide.createIcons();
   }
 }
 
@@ -161,23 +172,40 @@ function renderWelcome() {
   const card = document.createElement('div');
   card.className = 'welcome-card';
   card.innerHTML = `
-    <div class="welcome-logo">⚖️</div>
+    <div class="welcome-logo-box"><i data-lucide="scale"></i></div>
     <div class="welcome-title">Namaste 🙏 I am Nyaya Mitra</div>
     <div class="welcome-subtitle">
-      Your AI legal guide for Indian law. Ask me anything about:
+      Your AI legal guide for Indian law. I can provide insights based on:
     </div>
-    <div class="welcome-chips">
-      <span class="welcome-chip">📜 Bharatiya Nyaya Sanhita (BNS)</span>
-      <span class="welcome-chip">🏛️ BNSS</span>
-      <span class="welcome-chip">📋 BSA</span>
-      <span class="welcome-chip">🇮🇳 Constitution of India</span>
+    <div class="welcome-grid">
+      <div class="welcome-chip" onclick="document.getElementById('query-input').value='What is the punishment for theft under BNS?'; document.getElementById('query-input').focus()">
+        <div class="chip-icon"><i data-lucide="scroll-text"></i></div>
+        <div class="chip-title">BNS (Sanhita)</div>
+        <div class="chip-desc">Bharatiya Nyaya Sanhita — the criminal code of India.</div>
+      </div>
+      <div class="welcome-chip" onclick="document.getElementById('query-input').value='What are the rules for an arrest under BNSS?'; document.getElementById('query-input').focus()">
+        <div class="chip-icon"><i data-lucide="landmark"></i></div>
+        <div class="chip-title">BNSS</div>
+        <div class="chip-desc">Bharatiya Nagarik Suraksha Sanhita — criminal procedure.</div>
+      </div>
+      <div class="welcome-chip" onclick="document.getElementById('query-input').value='What constitutes electronic evidence under BSA?'; document.getElementById('query-input').focus()">
+        <div class="chip-icon"><i data-lucide="book-open"></i></div>
+        <div class="chip-title">BSA</div>
+        <div class="chip-desc">Bharatiya Sakshya Adhiniyam — the rules of evidence.</div>
+      </div>
+      <div class="welcome-chip" onclick="document.getElementById('query-input').value='What are the fundamental rights in the Constitution?'; document.getElementById('query-input').focus()">
+        <div class="chip-icon"><i data-lucide="flag"></i></div>
+        <div class="chip-title">Constitution</div>
+        <div class="chip-desc">The supreme law and fundamental rights of India.</div>
+      </div>
     </div>
     <div class="welcome-disclaimer">
-      ⚠️ I provide legal <strong>information</strong>, not legal advice.
-      Always consult a qualified lawyer for your specific situation.
+      <i data-lucide="alert-triangle"></i>
+      <span>I provide legal <strong>information</strong>, not legal advice. Always consult a qualified lawyer for your specific situation.</span>
     </div>
   `;
   container.appendChild(card);
+  lucide.createIcons();
 }
 
 function renderMessage(msg) {
@@ -198,12 +226,13 @@ function renderMessage(msg) {
     wrapper.id = `msg-${msg.id}`;
     wrapper.innerHTML = `
       <div class="error-card">
-        <div class="error-badge">⚠️ ERROR</div>
+        <div class="error-badge"><i data-lucide="alert-circle" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:4px;"></i> ERROR</div>
         <div class="error-text">${escHtml(msg.content)}</div>
-        <button class="retry-btn" onclick="retryLast()">↺ Retry</button>
+        <button class="retry-btn" onclick="retryLast()"><i data-lucide="refresh-cw" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:4px;"></i> Retry</button>
       </div>
     `;
     container.appendChild(wrapper);
+    lucide.createIcons();
     return;
   }
 
@@ -253,10 +282,10 @@ function renderMessage(msg) {
   wrapper.innerHTML = `
     <div class="ai-card">
       <div class="card-header">
-        <span class="card-badge">⚖️ NYAYA MITRA</span>
-        <button class="copy-btn" id="${copyId}" onclick="copyAnswer('${msg.id}', '${copyId}')">⎘ Copy</button>
+        <span class="card-badge"><i data-lucide="scale" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:4px;"></i> NYAYA MITRA</span>
+        <button class="copy-btn" id="${copyId}" onclick="copyAnswer('${msg.id}', '${copyId}')"><i data-lucide="copy" style="width:14px;height:14px;"></i> Copy</button>
       </div>
-      <div class="disclaimer-pill">⚠️ Legal information only — not legal advice. Consult a lawyer.</div>
+      <div class="disclaimer-pill"><i data-lucide="alert-triangle" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:4px;"></i> Legal information only — not legal advice. Consult a lawyer.</div>
       <div class="explanation">${escHtml(explanation)}</div>
       ${citationsHtml}
       ${stepsHtml}
@@ -270,6 +299,7 @@ function renderMessage(msg) {
   wrapper.dataset.steps       = JSON.stringify(steps);
 
   container.appendChild(wrapper);
+  lucide.createIcons();
 }
 
 function renderTypingIndicator() {
@@ -430,11 +460,12 @@ function toggleKeyVisibility() {
   const btn   = document.getElementById('toggle-eye');
   if (input.type === 'password') {
     input.type = 'text';
-    btn.textContent = '🙈';
+    btn.innerHTML = '<i data-lucide="eye-off"></i>';
   } else {
     input.type = 'password';
-    btn.textContent = '👁';
+    btn.innerHTML = '<i data-lucide="eye"></i>';
   }
+  lucide.createIcons();
 }
 
 async function testConnection() {
@@ -508,11 +539,12 @@ function updateKeyPill() {
   const pillTxt = document.getElementById('key-status-text');
   if (state.apiKey) {
     pill.className = 'key-pill key-set';
-    pillTxt.textContent = `Key set (${state.apiKey.slice(0, 6)}…)`;
+    pillTxt.innerHTML = `<i data-lucide="check" style="width:14px;height:14px;vertical-align:middle;margin-right:4px;"></i> Key set (${state.apiKey.slice(0, 6)}…)`;
   } else {
     pill.className = 'key-pill key-missing';
-    pillTxt.textContent = 'No key — tap to add';
+    pillTxt.innerHTML = `<i data-lucide="key" style="width:14px;height:14px;vertical-align:middle;margin-right:4px;"></i> No key — tap to add`;
   }
+  lucide.createIcons();
 }
 
 // ─── Chat management ──────────────────────────────────────────────────────────

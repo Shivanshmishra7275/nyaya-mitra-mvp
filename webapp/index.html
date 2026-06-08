@@ -8,19 +8,34 @@
   <meta property="og:title" content="Nyaya Mitra — AI Legal Guide for Indian Law" />
   <meta property="og:description" content="Free AI-powered legal assistant for Indian law. Ask about BNS, BNSS, BSA and Constitution." />
   <title>Nyaya Mitra — AI Legal Guide for Indian Law</title>
+  
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  
+  <!-- Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <!-- Mesh Gradient Background -->
+  <div class="mesh-bg">
+    <div class="mesh-blob blob-1"></div>
+    <div class="mesh-blob blob-2"></div>
+    <div class="mesh-blob blob-3"></div>
+  </div>
+
   <!-- ── App Shell ─────────────────────────────────────────────────────────── -->
   <div id="app">
 
     <!-- Sidebar -->
     <aside id="sidebar">
       <div class="sidebar-header">
-        <span class="logo-icon">⚖️</span>
+        <div class="logo-icon-box">
+          <i data-lucide="scale" class="logo-icon"></i>
+        </div>
         <div>
           <h1 class="app-title">Nyaya Mitra</h1>
           <p class="app-subtitle">AI Legal Guide · Indian Law</p>
@@ -28,26 +43,26 @@
       </div>
 
       <div class="sidebar-section">
-        <h3 class="section-label">COVERS</h3>
+        <h3 class="section-label">Knowledge Base</h3>
         <ul class="coverage-list">
-          <li>📜 Bharatiya Nyaya Sanhita (BNS)</li>
-          <li>🏛️ Bharatiya Nagarik Suraksha Sanhita (BNSS)</li>
-          <li>📋 Bharatiya Sakshya Adhiniyam (BSA)</li>
-          <li>🇮🇳 Constitution of India</li>
+          <li><i data-lucide="scroll-text"></i> Bharatiya Nyaya Sanhita (BNS)</li>
+          <li><i data-lucide="landmark"></i> BNSS</li>
+          <li><i data-lucide="book-open"></i> Bharatiya Sakshya (BSA)</li>
+          <li><i data-lucide="flag"></i> Constitution of India</li>
         </ul>
       </div>
 
       <div class="sidebar-section">
-        <h3 class="section-label">API KEY</h3>
+        <h3 class="section-label">API Key</h3>
         <div id="key-status-pill" class="key-pill key-missing" onclick="openKeyModal()">
-          🔑 <span id="key-status-text">No key — tap to add</span>
+          <i data-lucide="key" class="key-icon"></i> <span id="key-status-text">No key — tap to add</span>
         </div>
       </div>
 
       <div class="sidebar-section">
-        <h3 class="section-label">SERVER</h3>
+        <h3 class="section-label">Server Status</h3>
         <div id="server-status-pill" class="server-pill">
-          <span id="server-dot">⏳</span>
+          <i data-lucide="loader-2" class="server-icon spin"></i>
           <span id="server-text">Checking…</span>
         </div>
         <p class="sidebar-hint">
@@ -57,42 +72,57 @@
       </div>
 
       <div class="sidebar-actions">
-        <button id="clear-btn" class="btn-ghost" onclick="clearChat()">🗑 Clear Chat</button>
+        <button id="clear-btn" class="btn-ghost" onclick="clearChat()"><i data-lucide="trash-2"></i> Clear Chat</button>
         <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="btn-ghost">
-          Get Free API Key ↗
+          <i data-lucide="external-link"></i> Get Free API Key
         </a>
       </div>
 
-      <div class="sidebar-footer">
-        <p>100% free &amp; open source</p>
-        <p>BYOK — zero cost to operate</p>
-        <a href="https://github.com/Shivanshmishra7275/nyaya-mitra-mvp" target="_blank" rel="noopener">
-          ⭐ Star on GitHub
-        </a>
+      <!-- Developer Info -->
+      <div class="dev-info">
+        <h3 class="section-label">Developer</h3>
+        <div class="dev-card">
+          <div class="dev-name">Shivansh Mishra</div>
+          <div class="dev-role">ML Engineer & Full Stack Dev</div>
+          <div class="dev-links">
+            <a href="mailto:shivanshmishraji90@gmail.com" class="dev-link"><i data-lucide="mail"></i> Email</a>
+            <a href="https://www.linkedin.com/in/shivansh-mishra-132b97358" target="_blank" rel="noopener" class="dev-link"><i data-lucide="linkedin"></i> LinkedIn</a>
+            <a href="https://github.com/Shivansh-mishraji" target="_blank" rel="noopener" class="dev-link"><i data-lucide="github"></i> GitHub 1</a>
+            <a href="https://github.com/Shivanshmishra7275" target="_blank" rel="noopener" class="dev-link"><i data-lucide="github"></i> GitHub 2</a>
+          </div>
+        </div>
       </div>
     </aside>
 
     <!-- Main content -->
     <main id="main">
 
-      <!-- Mobile header (hidden on desktop) -->
+      <!-- Mobile header -->
       <header id="mobile-header">
-        <button id="menu-btn" onclick="toggleSidebar()" aria-label="Open menu">☰</button>
-        <span class="logo-icon">⚖️</span>
-        <span class="app-title">Nyaya Mitra</span>
-        <div id="mobile-server-dot">⏳</div>
+        <button id="menu-btn" onclick="toggleSidebar()" aria-label="Open menu"><i data-lucide="menu"></i></button>
+        <div class="mobile-title-wrap">
+          <i data-lucide="scale" class="mobile-logo-icon"></i>
+          <span class="app-title">Nyaya Mitra</span>
+        </div>
+        <div id="mobile-server-dot"><i data-lucide="loader-2" class="spin"></i></div>
       </header>
 
       <!-- Disclaimer banner -->
       <div id="disclaimer-banner">
-        ⚠️ Legal information only — not legal advice. Always consult a qualified lawyer.
-        <button onclick="this.parentElement.remove()" class="banner-close">✕</button>
+        <div class="banner-content">
+          <i data-lucide="alert-triangle"></i>
+          <span>Legal information only — not legal advice. Always consult a qualified lawyer.</span>
+        </div>
+        <button onclick="this.parentElement.remove()" class="banner-close"><i data-lucide="x"></i></button>
       </div>
 
-      <!-- Offline banner (hidden by default) -->
+      <!-- Offline banner -->
       <div id="offline-banner" class="offline-banner hidden">
-        📡 Cannot reach server. Check your API URL setting.
-        <button onclick="checkServer()" class="banner-close">Retry</button>
+        <div class="banner-content">
+          <i data-lucide="wifi-off"></i>
+          <span>Cannot reach server. Check your API URL setting.</span>
+        </div>
+        <button onclick="checkServer()" class="btn-sm">Retry</button>
       </div>
 
       <!-- Chat messages -->
@@ -111,10 +141,7 @@
             oninput="autoResize(this)"
           ></textarea>
           <button id="send-btn" onclick="sendMessage()" aria-label="Send message" disabled>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="22" y1="2" x2="11" y2="13"></line>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-            </svg>
+            <i data-lucide="send"></i>
           </button>
         </div>
         <div id="char-count">0 / 1000</div>
@@ -125,35 +152,52 @@
   <!-- ── API Key Modal ────────────────────────────────────────────────────────── -->
   <div id="key-modal" class="modal-overlay hidden" onclick="closeModalOnOverlay(event)">
     <div class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-      <h2 id="modal-title">🔑 Gemini API Key</h2>
-
-      <div class="warning-banner">
-        <strong>⚠️ BYOK Notice:</strong> You are responsible for your Gemini API key, quota, and billing.
-        Your key is sent directly to the backend per-request and is <strong>never stored on our server</strong>.
-        <br/><br/>
-        Get a <strong>free key</strong> at:
-        <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com/app/apikey</a>
+      
+      <div class="modal-header">
+        <div class="modal-icon-box"><i data-lucide="key"></i></div>
+        <h2 id="modal-title">Gemini API Key</h2>
       </div>
 
-      <label class="field-label" for="api-key-input">Your Gemini API Key</label>
+      <div class="api-explainer">
+        <div class="explainer-step">
+          <div class="step-icon"><i data-lucide="shield-check"></i></div>
+          <div class="step-text">
+            <h4>Private & Secure</h4>
+            <p>Your key is stored locally in your browser and sent directly to Gemini.</p>
+          </div>
+        </div>
+        <div class="explainer-step">
+          <div class="step-icon"><i data-lucide="zap"></i></div>
+          <div class="step-text">
+            <h4>Bring Your Own Key</h4>
+            <p>We use your key to cover API costs. Get a <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">free key from Google AI Studio</a>.</p>
+          </div>
+        </div>
+      </div>
+
+      <label class="field-label" for="api-key-input">Enter Your Gemini API Key</label>
       <div class="key-input-row">
+        <i data-lucide="lock" class="input-icon"></i>
         <input
           type="password"
           id="api-key-input"
-          placeholder="AIza..."
+          placeholder="AIzaSy..."
           autocomplete="off"
           spellcheck="false"
         />
-        <button id="toggle-eye" onclick="toggleKeyVisibility()" aria-label="Show/hide key">👁</button>
+        <button id="toggle-eye" onclick="toggleKeyVisibility()" aria-label="Show/hide key"><i data-lucide="eye"></i></button>
       </div>
 
       <label class="persist-row">
         <input type="checkbox" id="persist-checkbox" />
-        <span>Save key in this browser (localStorage — stays on your device only)</span>
+        <span class="persist-text">
+          <strong>Save key securely</strong><br/>
+          (Stores in your browser's localStorage for future visits)
+        </span>
       </label>
 
       <button id="test-btn" class="btn-secondary" onclick="testConnection()">
-        Test Connection
+        <i data-lucide="activity"></i> Test Connection
       </button>
 
       <div id="test-result" class="test-result hidden"></div>
@@ -163,10 +207,6 @@
         <button class="btn-ghost" onclick="clearKey()">Clear Key</button>
         <button class="btn-ghost" onclick="closeKeyModal()">Cancel</button>
       </div>
-
-      <p class="modal-hint">
-        The key is only used in your browser session for API calls. It never goes to any third-party server except Google's Gemini API.
-      </p>
     </div>
   </div>
 
