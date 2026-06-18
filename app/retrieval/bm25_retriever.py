@@ -19,12 +19,11 @@ def _tokenize(text: str) -> list[str]:
     """
     Tokenize text for BM25 indexing and querying.
 
-    Uses regex \\b word-boundary matching instead of whitespace split so that:
-      - Punctuation is stripped: "theft." == "theft", "section," == "section"
-      - Numbers are preserved: "section 378" -> ["section", "378"]
-      - Consistent tokenization between index-time and query-time
+    Uses regex split on non-word characters instead of \\b word-boundary findall
+    to avoid catastrophic backtracking (ReDoS) on malformed inputs without spaces.
     """
-    return re.findall(r'\b\w+\b', text.lower())
+    # Filter out empty strings after split
+    return [t for t in re.split(r'\W+', text.lower()) if t]
 
 
 class BM25Retriever:

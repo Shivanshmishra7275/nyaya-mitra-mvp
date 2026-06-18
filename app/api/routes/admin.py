@@ -8,7 +8,8 @@ SECURITY:
   If ADMIN_SECRET is not set, all admin endpoints are disabled (return 404) in
   production and are only open in development (with a warning).
 """
-import random
+import hmac
+import secrets
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from app.core.config import get_settings
 
@@ -34,7 +35,7 @@ def _verify_admin_secret(x_admin_secret: str = Header(None, alias="X-Admin-Secre
 
     # If secret is configured, always enforce it regardless of environment
     if admin_secret:
-        if not x_admin_secret or x_admin_secret != admin_secret:
+        if not x_admin_secret or not hmac.compare_digest(x_admin_secret, admin_secret):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid or missing X-Admin-Secret header.",
@@ -72,8 +73,7 @@ async def debug_corpus(request: Request):
     sources = set()
     sample_chunk = None
     if chunk_count > 0:
-        sample_idx = random.randint(0, chunk_count - 1)
-        sample_chunk = bm25._chunks[sample_idx]
+        sample_chunk = secrets.choice(bm25._chunks)
         for chunk in bm25._chunks:
             source = chunk.get("metadata", {}).get("source")
             if source:
