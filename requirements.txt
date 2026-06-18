@@ -3,35 +3,39 @@
 # Venv:    python -m venv venv && venv\Scripts\activate (Windows)
 
 # ── FastAPI & ASGI ────────────────────────────────────────────────────────────
-fastapi>=0.111.0
-uvicorn[standard]>=0.30.0
-slowapi>=0.1.9             # Per-IP rate limiting on the query endpoint
+fastapi==0.111.0
+uvicorn[standard]==0.30.0
+slowapi==0.1.9             # Per-IP rate limiting on the query endpoint
 
 # ── Pydantic settings (env-driven config) ─────────────────────────────────────
-pydantic-settings>=2.0.0
+pydantic-settings==2.0.0
 
 # ── Google Gemini SDK (new, non-deprecated) ───────────────────────────────────
-google-genai>=2.0.0
+google-genai==0.3.0
 
 # ── BM25 lexical retrieval ────────────────────────────────────────────────────
-rank_bm25>=0.2.2
+rank_bm25==0.2.2
 
 # ── ETL / PDF parsing ─────────────────────────────────────────────────────────
-langchain>=0.2.0
-langchain-community>=0.2.0
-langchain-text-splitters>=0.2.0
-pypdf>=4.0.0
+langchain==0.2.0
+langchain-community==0.2.0
+langchain-text-splitters==0.2.0
+pypdf==4.0.0
+unstructured[pdf]>=0.23.0
 
 # ── Secrets / environment ────────────────────────────────────────────────────
-python-dotenv>=1.0.0
+python-dotenv==1.0.0
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+structlog==24.1.0
 
 # ── Testing ───────────────────────────────────────────────────────────────────
-pytest>=8.0.0
-httpx>=0.27.0           # Required by FastAPI TestClient
+pytest==8.0.0
+httpx==0.27.0           # Required by FastAPI TestClient
 
 # ── Optional: Semantic retrieval (requires Docker for Qdrant) ──────────────────
 # Enabled by setting QDRANT_ENABLED=true in .env
 # Run Qdrant: docker run -p 6333:6333 qdrant/qdrant
 # Then ingest: python etl_pipeline.py --qdrant
-sentence-transformers>=3.0.0   # local embedding model, ~22 MB, no API cost
-qdrant-client>=1.9.0            # Qdrant vector DB client (connects to local or cloud)
+sentence-transformers==3.0.0   # local embedding model, ~22 MB, no API cost
+qdrant-client==1.9.0            # Qdrant vector DB client (connects to local or cloud)

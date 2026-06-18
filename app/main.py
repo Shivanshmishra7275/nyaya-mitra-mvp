@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -31,12 +32,17 @@ limiter = Limiter(key_func=get_remote_address)
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
+import structlog
+structlog.configure(
+    processors=[
+        structlog.processors.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.dev.ConsoleRenderer(),
+    ],
+    wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
+    logger_factory=structlog.PrintLoggerFactory(),
 )
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 settings = get_settings()
 
 
@@ -130,6 +136,9 @@ def create_app() -> FastAPI:
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-API-Key"],
     )
+
+    # Trust X-Forwarded-For headers from the proxy (e.g., Render)
+    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
     # ── Routes ───────────────────────────────────────────────────────────────
     app.include_router(health_router.router, prefix="")
