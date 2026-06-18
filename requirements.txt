@@ -8,20 +8,18 @@ uvicorn[standard]==0.30.0
 slowapi==0.1.9             # Per-IP rate limiting on the query endpoint
 
 # ── Pydantic settings (env-driven config) ─────────────────────────────────────
-pydantic-settings==2.0.0
+pydantic-settings>=2.4.0
 
-# ── Google Gemini SDK (new, non-deprecated) ───────────────────────────────────
+# ── External AI & Retrieval ──────────────────────────────────────────────────
 google-genai==0.3.0
-
-# ── BM25 lexical retrieval ────────────────────────────────────────────────────
+numpy>=2.1.0
 rank_bm25==0.2.2
 
 # ── ETL / PDF parsing ─────────────────────────────────────────────────────────
-langchain==0.2.0
-langchain-community==0.2.0
-langchain-text-splitters==0.2.0
+langchain~=0.3.0
+langchain-community~=0.3.0
+langchain-text-splitters~=0.3.0
 pypdf==4.0.0
-unstructured[pdf]>=0.23.0
 
 # ── Secrets / environment ────────────────────────────────────────────────────
 python-dotenv==1.0.0

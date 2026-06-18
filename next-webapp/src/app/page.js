@@ -23,7 +23,7 @@ export default function Home() {
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    const savedKey = localStorage.getItem('nyaya_mitra_api_key');
+    const savedKey = sessionStorage.getItem('nyaya_mitra_api_key');
     if (savedKey) setApiKey(savedKey);
     checkServer(savedKey);
   }, []);
@@ -88,13 +88,13 @@ export default function Home() {
   const clearChat = () => setMessages([]);
   
   const saveKeyLocal = () => {
-    localStorage.setItem('nyaya_mitra_api_key', apiKey);
+    sessionStorage.setItem('nyaya_mitra_api_key', apiKey);
     setKeyModalOpen(false);
     checkServer(apiKey);
   };
   
   const clearKeyLocal = () => {
-    localStorage.removeItem('nyaya_mitra_api_key');
+    sessionStorage.removeItem('nyaya_mitra_api_key');
     setApiKey('');
   };
 

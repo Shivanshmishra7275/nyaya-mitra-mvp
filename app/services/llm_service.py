@@ -163,6 +163,15 @@ def _is_clear_out_of_scope(query: str) -> bool:
     """Conservative classifier for clearly non-criminal queries."""
     import re
     q = query.lower()
+    
+    # Hard block known prompt injection prefixes
+    injection_patterns = [
+        "ignore all previous", "you are now", "translate the following", 
+        "write a poem", "write code", "system prompt", "bypass", "jailbreak"
+    ]
+    if any(p in q for p in injection_patterns):
+        return True
+        
     civil_only = [
         "divorce", "custody", "maintenance", "alimony", "property dispute", "partition",
         "rent", "tenant", "landlord", "contract", "agreement", "breach", "employment",
@@ -173,13 +182,16 @@ def _is_clear_out_of_scope(query: str) -> bool:
         "fir", "police", "arrest", "bail", "charge", "ipc", "bns", "bnss", "bsa",
         "theft", "fraud", "cheating", "assault", "murder", "kidnap", "extortion",
         "robbery", "molestation", "stalking", "dowry", "domestic violence",
-        "forgery", "criminal",
+        "forgery", "criminal", "court", "magistrate", "judge", "jail", "prison"
     ]
     
     civil_hits = sum(1 for c in civil_only if re.search(rf'\b{c}\b', q))
     criminal_hits = sum(1 for h in criminal_hints if re.search(rf'\b{h}\b', q))
     
-    if civil_hits > 0 and criminal_hits <= civil_hits:
+    if civil_hits > 0 and criminal_hits == 0:
+        return True
+        
+    if civil_hits > 0 and civil_hits >= criminal_hits:
         return True
         
     return False

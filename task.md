@@ -19,3 +19,9 @@
 - `[x]` Create GitHub Actions pipeline `.github/workflows/main.yml`
 - `[x]` Pin exact dependencies in `requirements.txt`
 - `[x]` Add structured logging with `structlog`
+
+## Phase 5: V2 Audit Remediation (Next.js & Security)
+- `[ ]` Fix Dependency Installation (Python 3.13 / unstructured) & run tests
+- `[x]` Secure `next-webapp/src/app/page.js` (Move `localStorage` to `sessionStorage`)
+- `[x]` Add strict CSP to `next-webapp/next.config.mjs`
+- `[x]` Harden Out-of-Scope logic in `app/services/llm_service.py`
