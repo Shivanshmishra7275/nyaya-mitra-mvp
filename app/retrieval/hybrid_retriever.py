@@ -47,9 +47,20 @@ class HybridRetriever:
         self,
         bm25: BM25Retriever,
         qdrant_retriever=None,  # Optional QdrantRetriever — None disables semantic
+        cross_encoder_model_name: Optional[str] = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     ):
         self._bm25 = bm25
         self._qdrant = qdrant_retriever
+        self._cross_encoder = None
+        if cross_encoder_model_name:
+            try:
+                from sentence_transformers import CrossEncoder # noqa: PLC0415
+                logger.info("Loading Cross-Encoder model: %s", cross_encoder_model_name)
+                self._cross_encoder = CrossEncoder(cross_encoder_model_name)
+            except ImportError:
+                logger.warning("sentence-transformers not installed. Cross-encoder disabled.")
+            except Exception as e:
+                logger.warning("Failed to load cross-encoder: %s", e)
 
     def retrieve(self, query: str, top_k: int = 15) -> tuple[list[dict], str]:
         """
@@ -72,24 +83,45 @@ class HybridRetriever:
             coverage_note += f" Coverage incomplete (missing: {', '.join(missing)})."
         coverage_note += " Sources are official act texts only (no case law)."
 
+        # Apply Reranking if available
+        def _rerank(results):
+            if self._cross_encoder is not None and results:
+                try:
+                    pairs = [[query, chunk["text"]] for chunk in results]
+                    scores = self._cross_encoder.predict(pairs)
+                    for chunk, score in zip(results, scores):
+                        chunk["rerank_score"] = float(score)
+                    results = sorted(results, key=lambda x: x["rerank_score"], reverse=True)
+                except Exception as e:
+                    logger.warning("Cross-encoder reranking failed: %s", e)
+            return results
+
         # BM25-only path (fast, no Qdrant)
         if self._qdrant is None:
-            note = f"Retrieved {len(bm25_results[:top_k])} chunks via BM25-only. {coverage_note}"
+            results = _rerank(bm25_results[:top_k])
+            note = f"Retrieved {len(results)} chunks via BM25-only."
+            if self._cross_encoder: note += " (Reranked via Cross-Encoder)."
+            note += f" {coverage_note}"
             logger.info(note)
-            return bm25_results[:top_k], note
+            return results, note
 
         # Try hybrid path with RRF
         try:
             semantic_results = self._qdrant.retrieve(query, top_k=top_k)
             merged = _apply_rrf(bm25_results, semantic_results, top_k=top_k)
-            note = f"Retrieved {len(merged)} chunks via Hybrid (BM25 + Semantic, RRF fusion). {coverage_note}"
+            merged = _rerank(merged)
+            note = f"Retrieved {len(merged)} chunks via Hybrid (BM25 + Semantic, RRF fusion)."
+            if self._cross_encoder: note += " (Reranked via Cross-Encoder)."
+            note += f" {coverage_note}"
             logger.info(note)
             return merged, note
 
         except Exception as exc:
             logger.warning("Qdrant retrieval failed, falling back to BM25: %s", exc)
-            fallback = bm25_results[:top_k]
-            note = f"Retrieved {len(fallback)} chunks via BM25-only (Qdrant unavailable). {coverage_note}"
+            fallback = _rerank(bm25_results[:top_k])
+            note = f"Retrieved {len(fallback)} chunks via BM25-only (Qdrant unavailable)."
+            if self._cross_encoder: note += " (Reranked via Cross-Encoder)."
+            note += f" {coverage_note}"
             logger.info(note)
             return fallback, note
 

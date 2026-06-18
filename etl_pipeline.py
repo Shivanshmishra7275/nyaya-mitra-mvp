@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import UnstructuredPDFLoader
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -111,8 +112,8 @@ def discover_pdfs(pdf_dir: Path, include_all: bool = False) -> list[Path]:
 
 def extract_documents(pdf_dir: Path, include_all: bool = False) -> list[Any]:
     """
-    Load all PDFs found in pdf_dir using LangChain's PyPDFLoader.
-    Each page becomes a LangChain Document object.
+    Load all PDFs found in pdf_dir using LangChain's UnstructuredPDFLoader (or PyPDFLoader as fallback).
+    Each page/element becomes a LangChain Document object.
     Source metadata is normalised to just the filename.
     """
     all_documents = []
@@ -121,8 +122,14 @@ def extract_documents(pdf_dir: Path, include_all: bool = False) -> list[Any]:
     for pdf_path in pdfs:
         try:
             logger.info("Loading: %s", pdf_path.name)
-            loader = PyPDFLoader(str(pdf_path))
-            documents = loader.load()
+            try:
+                # Use Unstructured for better structural chunking out of the box if available
+                loader = UnstructuredPDFLoader(str(pdf_path), mode="elements")
+                documents = loader.load()
+            except Exception as e:
+                logger.warning("UnstructuredPDFLoader failed for '%s' (fallback to PyPDFLoader): %s", pdf_path.name, e)
+                loader = PyPDFLoader(str(pdf_path))
+                documents = loader.load()
 
             act_meta = ACT_SOURCES.get(pdf_path.name.lower()) if not include_all else None
             for doc in documents:
@@ -133,11 +140,11 @@ def extract_documents(pdf_dir: Path, include_all: bool = False) -> list[Any]:
                     doc.metadata["source_url"] = act_meta["source_url"]
 
             all_documents.extend(documents)
-            logger.info("  -> %d page(s) from '%s'", len(documents), pdf_path.name)
+            logger.info("  -> %d element(s)/page(s) from '%s'", len(documents), pdf_path.name)
         except Exception as exc:
             logger.error("Failed to load '%s': %s", pdf_path.name, exc, exc_info=True)
 
-    logger.info("Extraction complete. Total pages: %d", len(all_documents))
+    logger.info("Extraction complete. Total elements/pages: %d", len(all_documents))
     return all_documents
 
 
