@@ -1,5 +1,9 @@
 # Nyaya Mitra ⚖️ — Your Friendly Indian Criminal Law Assistant
 
+<div align="center">
+  <img src="assets/hero_3d.png" alt="Nyaya Mitra 3D Scales of Justice" width="800"/>
+</div>
+
 > **Turn messy situations into clear legal steps.** 
 > **100% Free · Open Source · Bring Your Own Key**
 
@@ -34,6 +38,10 @@ Most legal tools act like search engines and expect you to know what to ask. We 
 ---
 
 ## 🏗️ How It Works (For the Tech Curious)
+
+<div align="center">
+  <img src="assets/hero_ui.png" alt="Nyaya Mitra Glassmorphic UI" width="800"/>
+</div>
 
 We built this project to be **100% Free** to run and host forever!
 
