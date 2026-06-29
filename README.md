@@ -1,153 +1,184 @@
-# Nyaya Mitra ⚖️ — Your Friendly Indian Criminal Law Assistant
+# Nyaya Mitra ⚖️ — AI Legal Super-App for India
 
 <div align="center">
-  <img src="assets/hero_3d.png" alt="Nyaya Mitra 3D Scales of Justice" width="800"/>
+
+![Nyaya Mitra Banner](https://capsule-render.vercel.app/api?type=shark&height=280&text=Nyaya%20Mitra%20%E2%9A%96%EF%B8%8F&fontSize=62&fontAlign=50&fontAlignY=50&color=0:0d1117,40:1a1033,100:2d1f00&fontColor=fbbf24&desc=AI%20Legal%20Intelligence%20for%20India%20%7C%20BNS%20%7C%20BNSS%20%7C%20BSA&descFontColor=f59e0b&descAlignY=70&animation=fadeIn)
+
+
+
+<br/>
+
+<p>
+  <img src="https://img.shields.io/badge/Status-In_Development-f59e0b?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" />
+  <img src="https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=next.js&logoColor=white" />
+  <img src="https://img.shields.io/badge/Google_Gemini-4285F4?style=for-the-badge&logo=google&logoColor=white" />
+  <img src="https://img.shields.io/badge/Free_Forever-10b981?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/BYOK-Bring_Your_Own_Key-7C3AED?style=for-the-badge" />
+</p>
+
+> **Turn messy legal situations into clear, actionable strategies.**  
+> **100% Free · Open Source · No Data Saved · Bring Your Own Key**
+
 </div>
 
-> **Turn messy situations into clear legal steps.** 
-> **100% Free · Open Source · Bring Your Own Key**
+---
 
-Welcome to **Nyaya Mitra**! 👋 
+## 🎯 What Is Nyaya Mitra?
 
-Nyaya Mitra isn't just another generic AI chatbot. It is a specialized **Case Intelligence Assistant** built to help you understand India's new criminal laws: the **Bharatiya Nyaya Sanhita (BNS)**, **Bharatiya Nagarik Suraksha Sanhita (BNSS)**, and **Bharatiya Sakshya Adhiniyam (BSA)**.
+**Nyaya Mitra** ("Friend of Justice" in Hindi) is a specialized **AI Case Intelligence Assistant** built to make India's new criminal justice framework accessible to everyone — not just lawyers.
 
-Instead of expecting you to know legal jargon, Nyaya Mitra lets you tell your story naturally and translates it into a clear, actionable legal strategy.
+Most Indians can't afford legal consultations. Nyaya Mitra bridges this gap by letting anyone describe their situation in plain language and receiving expert-level legal analysis based on India's three new criminal laws:
+
+- 📘 **Bharatiya Nyaya Sanhita (BNS)** — replaces IPC
+- 📗 **Bharatiya Nagarik Suraksha Sanhita (BNSS)** — replaces CrPC
+- 📙 **Bharatiya Sakshya Adhiniyam (BSA)** — replaces Indian Evidence Act
+
+> 💡 **Pitched at ENTREPRENIA 2025** as a high-impact AI product for social good.
 
 ---
 
-## 🎯 Why Nyaya Mitra is Special
+## ✨ Key Features
 
-Most legal tools act like search engines and expect you to know what to ask. We do things differently:
-
-1. **Tell Your Story:** Just type what happened in plain English. No need to cite laws!
-2. **Instant Legal Mapping:** It instantly connects your story to the correct BNS/BNSS sections.
-3. **Spot Weaknesses:** It acts like a critical friend, telling you where your case might be weak (like missing evidence or documents).
-4. **Clear Strategy Paths:** It gives you 2-4 clear options on what to do next (like "File a Police Complaint" vs. "Settle Out of Court"), along with the pros and cons of each.
-5. **Lawyer Brief:** It creates a neat summary of your situation that you can hand straight to a human lawyer to save time and money!
-
----
-
-## ✅ What Nyaya Mitra Can (and Cannot) Do
-
-**What it DOES do:** It helps you understand Indian **criminal law** based strictly on the official rulebooks (BNS/BNSS/BSA).
-
-**What it DOES NOT do:** It cannot help with civil law, taxes, corporate issues, property disputes, or family matters (like divorce). 
-
-*Note: If you ask about something outside of criminal law, Nyaya Mitra will politely tell you it can't help, rather than making up an answer.*
+| Feature | Description |
+|---|---|
+| 🗣️ **Natural Language Input** | Describe what happened in plain English — no legal jargon needed |
+| ⚡ **Instant Legal Mapping** | Automatically maps your story to the correct BNS/BNSS/BSA sections |
+| 🔍 **Case Weakness Detector** | Identifies gaps in your case (missing evidence, documents, witnesses) |
+| 🗺️ **Strategy Paths** | 2–4 clear action options with pros/cons (file FIR, mediation, court, etc.) |
+| 📄 **Lawyer Brief Generator** | Creates a formatted summary to hand to a human lawyer — saves time & fees |
+| 🚨 **Raksha Mode** | Emergency logic system for urgent, time-sensitive legal situations |
+| 🔒 **Zero Data Storage** | Nothing is saved on our servers — complete privacy |
 
 ---
 
-## 🏗️ How It Works (For the Tech Curious)
-
-<div align="center">
-  <img src="assets/hero_ui.png" alt="Nyaya Mitra Glassmorphic UI" width="800"/>
-</div>
-
-We built this project to be **100% Free** to run and host forever!
+## 🏗️ Architecture
 
 ```
-You (The User)
-└── 🌐 Beautiful Website (Next.js)  ───────→ Fast Python Backend ──→ Google AI (Gemini)
-    (Hosted for free on Vercel)              (Hosted for free on Render)    (Using your own API key)
+User (Browser)
+│
+├── 🌐 Next.js Frontend  ──────────→  🐍 FastAPI Backend  ──────→  🤖 Google Gemini AI
+│   (Vercel — Free)                  (Render — Free)                  (Your API Key)
+│
+│   BM25 Vector Search (local, free) ── pulls from ──→ BNS/BNSS/BSA legal corpus
 ```
 
-### Why does it cost nothing to host?
-- **Backend (Brain):** Runs on Render's free tier because it doesn't store any data (it is "stateless").
-- **Website (Face):** Runs on Vercel's free tier.
-- **AI Cost:** We use a "Bring Your Own Key" (BYOK) model. You plug in your own free Google Gemini API key to use it.
-- **Database:** We use local, free memory techniques (BM25) instead of expensive cloud databases.
+### Why It Costs Nothing to Host
+| Component | Service | Cost |
+|---|---|---|
+| Frontend | Vercel free tier | $0 |
+| Backend | Render free tier (stateless) | $0 |
+| AI | Google Gemini API (BYOK) | $0 on free tier |
+| Database | BM25 local search (no cloud DB) | $0 |
 
 ---
 
-## 🔒 Your Privacy & Security
+## 🔒 Privacy & Security
 
-Your privacy is our top priority:
-- **No Data Saved:** We do not save your chats, your personal stories, or your API keys anywhere on our servers.
-- **Safe Key Storage:** Your Google API key is stored only in your browser tab (`sessionStorage`). The moment you close the tab, the key disappears.
-- **Strict Security:** The website is locked down against common internet attacks (like XSS or prompt injections).
+- **No Chat History Saved** — conversations are never stored server-side
+- **Session-Only Key Storage** — your Gemini API key lives in `sessionStorage` only; vanishes when you close the tab
+- **XSS Protected** — strict CSP + input sanitization
+- **Prompt Injection Hardened** — system prompts engineered against jailbreaks
+- **Scope-Limited** — refuses to answer civil, corporate, or family law (prevents hallucinations)
 
 ---
 
-## 🚀 Want to run it on your own computer?
+## 🗂️ Project Structure
 
-It's super easy to get Nyaya Mitra running on your laptop. You don't even need complex tools like C++ compilers!
+```
+nyaya-mitra-mvp/
+├── app/                      # FastAPI backend
+│   └── main.py               # API routes, RAG pipeline
+├── next-webapp/              # Next.js frontend
+├── nyaya-mitra-app/          # Mobile app (in progress)
+├── etl_pipeline.py           # Ingests BNS/BNSS/BSA PDFs → vector store
+├── main.py                   # Backend entrypoint
+├── requirements.txt          # Python dependencies
+├── Dockerfile                # Container support
+├── render.yaml               # Render deployment config
+├── tests/                    # API + integration tests
+├── .env.example              # Environment variable template
+└── assets/                   # UI screenshots and images
+```
 
-### 1. Download the Code
+---
+
+## 🚀 Run Locally
+
+### 1. Clone
 ```bash
 git clone https://github.com/Shivanshmishra7275/nyaya-mitra-mvp.git
 cd nyaya-mitra-mvp
 ```
 
-### 2. Start the Backend (The Brain)
-You just need Python (version 3.10 to 3.13) installed on your computer.
-
+### 2. Backend (Python FastAPI)
 ```bash
-# Create a safe space for Python (Virtual Environment)
+# Create virtual environment
 python -m venv venv
 
-# Activate it (Windows)
+# Activate (Windows)
 venv\Scripts\activate
-# Activate it (Mac/Linux)
+# Activate (Mac/Linux)
 # source venv/bin/activate
 
-# Install the required packages
+# Install dependencies
 pip install -r requirements.txt
 
-# Teach the AI the new Indian Laws (Ingest the PDFs)
+# Ingest legal PDFs into vector store (run once)
 python etl_pipeline.py
 
-# Turn on the server!
+# Start backend
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
-Awesome! The brain is now running at: **http://localhost:8000**
+Backend runs at: **http://localhost:8000**
 
-### 3. Start the Website (The Face)
-Open a *new* terminal window and run:
-
+### 3. Frontend (Next.js)
 ```bash
 cd next-webapp
-
-# Install the website packages
 npm install
-
-# Turn on the website!
 npm run dev
 ```
-Boom! 🎉 Open your browser and go to **http://localhost:3000** to see the beautiful interface.
+Frontend runs at: **http://localhost:3000**
 
 ---
 
-## 🛰️ How to Put It on the Internet (For Free!)
+## 🌐 Deploy for Free
 
-Want to share this with the world? Here is how to deploy it at zero cost:
+### Frontend → Vercel
+1. Push to GitHub
+2. Import repo at [vercel.com](https://vercel.com)
+3. Set Root Directory: `next-webapp`
+4. Deploy ✅
 
-### 1. Host the Website (Vercel)
-1. Push this code to your own GitHub account.
-2. Go to [Vercel.com](https://vercel.com/) and import your repository.
-3. Set the "Root Directory" to `next-webapp`.
-4. Click Deploy!
-
-### 2. Host the Backend (Render)
-1. Go to [Render.com](https://render.com/) and create a new "Web Service".
-2. Connect your GitHub repository (leave Root Directory blank).
-3. Build command: `pip install -r requirements.txt`
-4. Start command: `uvicorn app.main:app --host 0.0.0.0 --port 8000`
-5. Add these Environment Variables so the backend knows to trust your website:
-    - `APP_ENV=production`
-    - `ALLOWED_ORIGINS=https://your-vercel-website-url.vercel.app`
+### Backend → Render
+1. New Web Service at [render.com](https://render.com)
+2. Build: `pip install -r requirements.txt`
+3. Start: `uvicorn app.main:app --host 0.0.0.0 --port 8000`
+4. Add env vars:
+   - `APP_ENV=production`
+   - `ALLOWED_ORIGINS=https://your-app.vercel.app`
 
 ---
 
-## ⚠️ Important Legal Disclaimer
+## ⚠️ Legal Disclaimer
 
-Nyaya Mitra is a smart helper, **not a human lawyer**. It provides legal intelligence and structured case analysis to help you understand your situation before you meet a professional. It is **not legal advice**. Please always consult a real, qualified lawyer for your specific legal issues.
+Nyaya Mitra provides **legal intelligence and structured case analysis** to help you understand your situation — it is **not legal advice**. Always consult a qualified, licensed lawyer for your specific legal matters.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License — which means it is free to use, modify, share, and deploy!
+MIT License — free to use, modify, share, and deploy.
 
 ---
 
-*Built with ❤️ to make understanding Indian legal strategy accessible to everyone.*
+## 👤 Author
+
+**Shivansh Mishra** — ML Builder & AI Product Explorer  
+📍 Lucknow, India · [GitHub](https://github.com/Shivansh-mishraji) · [Portfolio](https://shivansh-mishraji.github.io/Portfolio-Website/) · [LinkedIn](https://www.linkedin.com/in/shivansh-mishra-132b97358)
+
+---
+
+<div align="center">
+  <i>⚖️ Built to make India's new criminal justice framework accessible to 1.4 billion people.</i>
+</div>
