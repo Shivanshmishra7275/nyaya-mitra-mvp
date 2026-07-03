@@ -362,7 +362,6 @@ async def generate_legal_response(
     client = genai.Client(api_key=api_key, http_options={"timeout": 60})
     prompt = build_prompt(query, chunks)
 
-    last_exc = None
     for attempt in range(1, max_retries + 1):
         try:
             # Offload the blocking SDK call to a thread — does NOT block event loop
@@ -375,15 +374,13 @@ async def generate_legal_response(
 
             try:
                 result = json.loads(clean)
-            except json.JSONDecodeError as exc:
-                last_exc = exc
+            except json.JSONDecodeError:
                 logger.warning("Malformed JSON returned. Attempting repair.")
                 try:
                     repaired = await _attempt_repair(client, raw_text)
                     repaired_clean = _extract_json_from_response(repaired)
                     result = json.loads(repaired_clean)
-                except Exception as repair_exc:
-                    last_exc = repair_exc
+                except Exception:
                     return _fallback_response(query, "Model returned invalid JSON after repair.")
 
             # Normalize and validate key fields
@@ -431,9 +428,8 @@ async def generate_legal_response(
             logger.info("LLM call successful on attempt %d.", attempt)
             return result
 
-        except ValueError as exc:
+        except ValueError:
             # Generic parsing or empty response error — retry once with async backoff
-            last_exc = exc
             if attempt < max_retries:
                 logger.warning("Retrying LLM call in 2s (attempt %d/%d)...", attempt, max_retries)
                 await asyncio.sleep(2)

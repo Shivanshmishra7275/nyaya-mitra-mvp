@@ -52,15 +52,7 @@ class HybridRetriever:
         self._bm25 = bm25
         self._qdrant = qdrant_retriever
         self._cross_encoder = None
-        if cross_encoder_model_name:
-            try:
-                from sentence_transformers import CrossEncoder # noqa: PLC0415
-                logger.info("Loading Cross-Encoder model: %s", cross_encoder_model_name)
-                self._cross_encoder = CrossEncoder(cross_encoder_model_name)
-            except ImportError:
-                logger.warning("sentence-transformers not installed. Cross-encoder disabled.")
-            except Exception as e:
-                logger.warning("Failed to load cross-encoder: %s", e)
+        self._cross_encoder_model_name = cross_encoder_model_name
 
     def retrieve(self, query: str, top_k: int = 15) -> tuple[list[dict], str]:
         """
@@ -85,22 +77,35 @@ class HybridRetriever:
 
         # Apply Reranking if available
         def _rerank(results):
-            if self._cross_encoder is not None and results:
-                try:
-                    pairs = [[query, chunk["text"]] for chunk in results]
-                    scores = self._cross_encoder.predict(pairs)
-                    for chunk, score in zip(results, scores):
-                        chunk["rerank_score"] = float(score)
-                    results = sorted(results, key=lambda x: x["rerank_score"], reverse=True)
-                except Exception as e:
-                    logger.warning("Cross-encoder reranking failed: %s", e)
+            if results and self._cross_encoder_model_name:
+                if self._cross_encoder is None:
+                    try:
+                        from sentence_transformers import CrossEncoder # noqa: PLC0415
+                        logger.info("Lazy loading Cross-Encoder model: %s", self._cross_encoder_model_name)
+                        self._cross_encoder = CrossEncoder(self._cross_encoder_model_name)
+                    except ImportError:
+                        logger.warning("sentence-transformers not installed. Cross-encoder disabled.")
+                        self._cross_encoder_model_name = None
+                    except Exception as e:
+                        logger.warning("Failed to load cross-encoder: %s", e)
+                        self._cross_encoder_model_name = None
+
+                if self._cross_encoder is not None:
+                    try:
+                        pairs = [[query, chunk["text"]] for chunk in results]
+                        scores = self._cross_encoder.predict(pairs)
+                        for chunk, score in zip(results, scores):
+                            chunk["rerank_score"] = float(score)
+                        results = sorted(results, key=lambda x: x["rerank_score"], reverse=True)
+                    except Exception as e:
+                        logger.warning("Cross-encoder reranking failed: %s", e)
             return results
 
         # BM25-only path (fast, no Qdrant)
         if self._qdrant is None:
             results = _rerank(bm25_results[:top_k])
             note = f"Retrieved {len(results)} chunks via BM25-only."
-            if self._cross_encoder: note += " (Reranked via Cross-Encoder)."
+            if self._cross_encoder is not None: note += " (Reranked via Cross-Encoder)."
             note += f" {coverage_note}"
             logger.info(note)
             return results, note
@@ -111,7 +116,7 @@ class HybridRetriever:
             merged = _apply_rrf(bm25_results, semantic_results, top_k=top_k)
             merged = _rerank(merged)
             note = f"Retrieved {len(merged)} chunks via Hybrid (BM25 + Semantic, RRF fusion)."
-            if self._cross_encoder: note += " (Reranked via Cross-Encoder)."
+            if self._cross_encoder is not None: note += " (Reranked via Cross-Encoder)."
             note += f" {coverage_note}"
             logger.info(note)
             return merged, note
@@ -120,7 +125,7 @@ class HybridRetriever:
             logger.warning("Qdrant retrieval failed, falling back to BM25: %s", exc)
             fallback = _rerank(bm25_results[:top_k])
             note = f"Retrieved {len(fallback)} chunks via BM25-only (Qdrant unavailable)."
-            if self._cross_encoder: note += " (Reranked via Cross-Encoder)."
+            if self._cross_encoder is not None: note += " (Reranked via Cross-Encoder)."
             note += f" {coverage_note}"
             logger.info(note)
             return fallback, note

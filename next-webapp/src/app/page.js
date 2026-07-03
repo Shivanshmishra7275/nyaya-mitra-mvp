@@ -8,12 +8,11 @@ import {
   Lock, Eye
 } from 'lucide-react';
 
-const API_BASE = 'http://localhost:8000/api/v1'; // Update for production
-
 export default function Home() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [apiBase, setApiBase] = useState('http://localhost:8000');
   const [isKeyModalOpen, setKeyModalOpen] = useState(false);
   const [serverStatus, setServerStatus] = useState('checking'); // checking, ok, offline
   const [isSidebarOpen, setSidebarOpen] = useState(false);
@@ -25,7 +24,12 @@ export default function Home() {
   useEffect(() => {
     const savedKey = sessionStorage.getItem('nyaya_mitra_api_key');
     if (savedKey) setApiKey(savedKey);
-    checkServer(savedKey);
+    
+    const defaultUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const savedUrl = localStorage.getItem('nyaya_mitra_api_url') || defaultUrl;
+    setApiBase(savedUrl);
+    
+    checkServer(savedUrl, savedKey);
   }, []);
 
   const scrollToBottom = () => {
@@ -36,13 +40,13 @@ export default function Home() {
     scrollToBottom();
   }, [messages, isTyping]);
 
-  const checkServer = async (key = apiKey) => {
+  const checkServer = async (url = apiBase, key = apiKey) => {
     setServerStatus('checking');
     try {
       const headers = {};
       if (key) headers['Authorization'] = `Bearer ${key}`;
       
-      const res = await fetch('http://localhost:8000/health', { headers }); // Use base health route
+      const res = await fetch(`${url}/health`, { headers }); // Use base health route
       if (res.ok) {
         setServerStatus('ok');
       } else {
@@ -65,7 +69,7 @@ export default function Home() {
       const headers = { 'Content-Type': 'application/json' };
       if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
       
-      const res = await fetch(`${API_BASE}/legal-query`, {
+      const res = await fetch(`${apiBase}/api/v1/legal-query`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ user_query: userMsg.content })
@@ -90,7 +94,7 @@ export default function Home() {
   const saveKeyLocal = () => {
     sessionStorage.setItem('nyaya_mitra_api_key', apiKey);
     setKeyModalOpen(false);
-    checkServer(apiKey);
+    checkServer(apiBase, apiKey);
   };
   
   const clearKeyLocal = () => {
@@ -130,6 +134,35 @@ export default function Home() {
           >
             <Key size={16} /> <span>{apiKey ? 'Key Saved' : 'No key — tap to add'}</span>
           </div>
+        </div>
+
+        <div className="sidebar-section">
+          <h3 className="section-label">Backend URL</h3>
+          <input
+            type="text"
+            value={apiBase}
+            onChange={(e) => {
+              const val = e.target.value.trim().replace(/\/$/, '');
+              setApiBase(val);
+              localStorage.setItem('nyaya_mitra_api_url', val);
+              checkServer(val, apiKey);
+            }}
+            placeholder="http://localhost:8000"
+            style={{
+              width: '100%',
+              background: 'var(--bg-input)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-sm)',
+              color: 'white',
+              padding: '8px 12px',
+              fontSize: '14px',
+              outline: 'none',
+              marginTop: '4px'
+            }}
+          />
+          <p className="sidebar-hint" style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
+            Change this to your deployed Render URL or local IP.
+          </p>
         </div>
 
         <div className="sidebar-section">
