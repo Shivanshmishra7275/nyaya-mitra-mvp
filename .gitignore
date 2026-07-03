@@ -14,10 +14,13 @@ venv/
 dist/
 build/
 
-# ── Node / Expo ───────────────────────────────────────────────────────────────
-nyaya-mitra-app/node_modules/
-nyaya-mitra-app/.expo/
-nyaya-mitra-app/web-build/
+# ── Node / Expo / Next.js ───────────────────────────────────────────────────
+node_modules/
+.expo/
+web-build/
+.next/
+out/
+.turbo/
 
 # ── Data / generated artefacts ───────────────────────────────────────────────────
 Raw_Data/
