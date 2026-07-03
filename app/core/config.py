@@ -49,6 +49,12 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-2.5-flash"
     LLM_TEMPERATURE: float = 0.2
 
+    # ── Database & JWT Authentication ─────────────────────────────────────────
+    DATABASE_URL: str = "sqlite+aiosqlite:///./nyaya_mitra.db"
+    JWT_SECRET: str = "supersecret_change_me_in_production"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
