@@ -45,3 +45,4 @@ aiosqlite==0.20.0
 pyjwt==2.8.0
 passlib[bcrypt]==1.7.4
 
+structlog
