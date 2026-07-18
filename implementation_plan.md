@@ -4,7 +4,7 @@ This master blueprint is designed to transform Nyaya Mitra from an MVP into a **
 
 ## User Review Required
 > [!IMPORTANT]
-> Please review this plan. This is a massive overhaul affecting Security, Architecture, DevOps, and MLOps. Once you approve, I will begin executing these changes step-by-step. 
+> Please review this plan. This is a massive overhaul affecting Security, Architecture, DevOps, and MLOps. Once you approve, I will begin executing these changes step-by-step.
 
 ## Open Questions
 1. **Frontend Migration:** Do you approve migrating the Vanilla JS web app to **Next.js** for better state management and SEO? We will deploy this on Vercel for **Free**.
