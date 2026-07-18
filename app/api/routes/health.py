@@ -11,7 +11,6 @@ from app.models.schemas import HealthResponse
 router = APIRouter()
 settings = get_settings()
 
-
 @router.get("/health", response_model=HealthResponse, tags=["System"])
 async def health_check(request: Request):
     """
@@ -39,7 +38,6 @@ async def health_check(request: Request):
         retrieval_mode=retrieval_mode,
         chunks_loaded=chunks_loaded,
     )
-
 
 @router.get("/version", tags=["System"])
 async def version():
