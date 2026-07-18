@@ -2,47 +2,45 @@
 # Install: pip install -r requirements.txt
 # Venv:    python -m venv venv && venv\Scripts\activate (Windows)
 
-# ── FastAPI & ASGI ────────────────────────────────────────────────────────────
+# ── FastAPI & ASGI ────────────────────────────────────────────────
 fastapi==0.111.0
 uvicorn[standard]==0.30.0
 slowapi==0.1.9             # Per-IP rate limiting on the query endpoint
 
-# ── Pydantic settings (env-driven config) ─────────────────────────────────────
+# ── Pydantic settings (env-driven config) ────────────────────────
 pydantic-settings>=2.4.0
 
-# ── External AI & Retrieval ──────────────────────────────────────────────────
+# ── External AI & Retrieval ──────────────────────────────────────
 google-genai==0.3.0
 numpy>=2.1.0
 rank_bm25==0.2.2
 
-# ── ETL / PDF parsing ─────────────────────────────────────────────────────────
+# ── ETL / PDF parsing ────────────────────────────────────────────
 langchain~=0.3.0
 langchain-community~=0.3.0
 langchain-text-splitters~=0.3.0
 pypdf==4.0.0
 
-# ── Secrets / environment ────────────────────────────────────────────────────
+# ── Secrets / environment ────────────────────────────────────────
 python-dotenv==1.0.0
 
-# ── Logging ───────────────────────────────────────────────────────────────────
+# ── Logging ──────────────────────────────────────────────────────
 structlog==24.1.0
 
-# ── Testing ───────────────────────────────────────────────────────────────────
+# ── Testing ──────────────────────────────────────────────────────
 pytest==8.0.0
 httpx==0.27.0           # Required by FastAPI TestClient
 
-# ── Optional: Semantic retrieval (requires Docker for Qdrant) ──────────────────
-# Enabled by setting QDRANT_ENABLED=true in .env
+# ── Optional: Semantic retrieval (requires local Qdrant) ─────────
 # Run Qdrant: docker run -p 6333:6333 qdrant/qdrant
 # Then ingest: python etl_pipeline.py --qdrant
-sentence-transformers==3.0.0   # local embedding model, ~22 MB, no API cost
-qdrant-client==1.9.0            # Qdrant vector DB client (connects to local or cloud)
+sentence-transformers==3.0.0
+qdrant-client==1.9.0
 
-# ── Database & Authentication ─────────────────────────────────────────────────
+# ── Database & Authentication ────────────────────────────────────
 sqlalchemy==2.0.28
 asyncpg==0.29.0
 aiosqlite==0.20.0
 pyjwt==2.8.0
 passlib[bcrypt]==1.7.4
-
-structlog
+alembic==1.13.1
