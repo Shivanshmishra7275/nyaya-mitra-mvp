@@ -22,7 +22,7 @@ def check_field(body, field_name, expected_type=None):
     if field_name not in body:
         print_fail(f"Missing field: {field_name}")
         return False
-    
+
     val = body[field_name]
     if expected_type and not isinstance(val, expected_type):
         print_fail(f"Field '{field_name}' should be {expected_type.__name__}, got {type(val).__name__}")
@@ -42,9 +42,9 @@ def run_scenario(name, query, api_key):
             print_fail(f"Expected HTTP 200, got {response.status_code}")
             print(response.text)
             return False
-        
+
         body = response.json()
-        
+
         # Check required shape
         fields_to_check = [
             ("answer", str),
@@ -56,22 +56,22 @@ def run_scenario(name, query, api_key):
             ("scope_status", str),
             ("confidence", dict)
         ]
-        
+
         all_passed = True
         for field, t in fields_to_check:
             if not check_field(body, field, t):
                 all_passed = False
-                
+
         if not all_passed:
             return False
-            
+
         print_success(f"Shape validated. scope_status = {body['scope_status']}")
         print(f"Answer snippet: {body['answer'][:100]}...")
         if 'confidence' in body:
             print(f"Confidence: {body['confidence'].get('label')} - {body['confidence'].get('reason')}")
-        
+
         return True
-    
+
     except requests.exceptions.ConnectionError:
         print_fail("Could not connect to localhost:8000. Is the server running?")
         return False
