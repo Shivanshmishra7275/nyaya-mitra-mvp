@@ -1,3 +1,8 @@
+"""
+Smoke Test module.
+Part of the Project Nyaya Mitra package.
+"""
+
 import json
 import requests
 import os
