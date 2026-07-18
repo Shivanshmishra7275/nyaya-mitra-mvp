@@ -31,11 +31,9 @@ logger = logging.getLogger(__name__)
 
 RRF_K = 60  # Standard RRF constant — higher = smoother, lower = more aggressive reranking
 
-
 def _rrf_score(rank: int, k: int = RRF_K) -> float:
     """Reciprocal Rank Fusion score for a result at position `rank` (0-indexed)."""
     return 1.0 / (k + rank + 1)  # +1 for 0-indexing
-
 
 class HybridRetriever:
     """
@@ -129,7 +127,6 @@ class HybridRetriever:
             note += f" {coverage_note}"
             logger.info(note)
             return fallback, note
-
 
 def _apply_rrf(
     primary_results: list[dict],
