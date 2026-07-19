@@ -45,3 +45,4 @@ pyjwt==2.8.0
 passlib[bcrypt]==1.7.4
 alembic==1.13.1
 # Requirements verified on 2026-07-19 12:40:34
+# Requirements verified on 2026-07-19 12:42:08
