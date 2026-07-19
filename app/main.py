@@ -45,7 +45,6 @@ structlog.configure(
 logger = structlog.get_logger(__name__)
 settings = get_settings()
 
-
 # ---------------------------------------------------------------------------
 # Lifespan — startup / shutdown
 # ---------------------------------------------------------------------------
@@ -100,7 +99,6 @@ async def lifespan(app: FastAPI):
 
     logger.info("=== Nyaya Mitra API shutting down ===")
 
-
 # ---------------------------------------------------------------------------
 # Application factory
 # ---------------------------------------------------------------------------
@@ -146,6 +144,5 @@ def create_app() -> FastAPI:
     app.include_router(admin_router.router, prefix="/api/v1/admin")
 
     return app
-
 
 app = create_app()
