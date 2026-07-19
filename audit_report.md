@@ -1,12 +1,12 @@
 # Nyaya Mitra SaaS Audit Report ⚖️
 
-This comprehensive audit of **Project Nyaya Mitra** evaluates the architecture, code quality, security, and product strategy from the perspective of an expert technical team (Co-Founder, Full-Stack Dev, Mobile Dev, DevOps, and MLOps). 
+This comprehensive audit of **Project Nyaya Mitra** evaluates the architecture, code quality, security, and product strategy from the perspective of an expert technical team (Co-Founder, Full-Stack Dev, Mobile Dev, DevOps, and MLOps).
 
 ---
 
 ## 1. Executive Summary
 
-Nyaya Mitra is a highly promising, domain-specific AI tool targeting the Indian legal tech space (BNS, BNSS, BSA). The **Zero Cost Architecture** with Bring Your Own Key (BYOK) is a brilliant go-to-market strategy for an MVP, keeping operational overhead near zero while validating user demand. 
+Nyaya Mitra is a highly promising, domain-specific AI tool targeting the Indian legal tech space (BNS, BNSS, BSA). The **Zero Cost Architecture** with Bring Your Own Key (BYOK) is a brilliant go-to-market strategy for an MVP, keeping operational overhead near zero while validating user demand.
 
 However, transitioning from an MVP to a robust, monetisable SaaS product requires addressing critical gaps in state management, security, testability, and backend scalability.
 
